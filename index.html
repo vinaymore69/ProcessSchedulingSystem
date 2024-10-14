@@ -24,12 +24,11 @@
             margin-right: 2px;
             display: inline-block; 
         }
-        h1{
+        h1 {
             font-size: 60px;
             font-weight: bolder;
-            
         }
-        button{
+        button {
             padding: 6px 20px;
             background: white;
             border-radius: 5px;
@@ -37,12 +36,12 @@
             transition: all 0.5s ease-in-out;
             margin: 10px;
         }
-        button:hover{
-            cursor:pointer;
+        button:hover {
+            cursor: pointer;
             color: white;
             background-color: black;
         }
-        input{
+        input, select {
             padding: 10px;
             border-radius: 6px;
             background-color: white;
@@ -50,14 +49,10 @@
             margin-bottom: 10px;
             color: black;
         }
-       
-        select{
+        select {
             background-color: black;
             color: aliceblue;
-            padding: 10px;
-            border-radius: 6px;
             cursor: pointer;
-            margin: 10px;
             font-family: Amita;
         }
     </style>
@@ -78,6 +73,10 @@
             <option value="RR">Round Robin (Preemptive)</option>
         </select>
     </div>
+    <div id="quantumInput" style="display: none;">
+        <label for="timeQuantum">Enter Time Quantum (in milliseconds):</label>
+        <input type="number" id="timeQuantum" value="2" min="1">
+    </div>
     <div>
         <label>Preemptive Scheduling:</label>
         <input type="radio" name="preemptive" id="preemptive" value="true"> Yes
@@ -88,256 +87,149 @@
     <div id="results"></div>
     <div id="ganttChart"></div>
 
-
-    <script >
+    <script>
         let processes = [];
+
+        // Show/hide the quantum input based on algorithm selection
+        document.getElementById('algorithm').addEventListener('change', function() {
+            const quantumInputDiv = document.getElementById('quantumInput');
+            quantumInputDiv.style.display = this.value === 'RR' ? 'block' : 'none';
+        });
+
         function createProcessInputs() {
             const numProcesses = document.getElementById('numProcesses').value;
             const processInputsDiv = document.getElementById('processInputs');
             processInputsDiv.innerHTML = '';
-        
+
             for (let i = 0; i < numProcesses; i++) {
                 processInputsDiv.innerHTML += `
                     <div>
-                     <br><br>   <label >Process ${i + 1} <br><br> Arrival Time:</label>
-                        <input type="number" id="arrivalTime${i}" value="0" required >
-                       <br><br> <label>Burst Time:</label> 
+                        <label>Process ${i + 1} Arrival Time:</label>
+                        <input type="number" id="arrivalTime${i}" value="0" required>
+                        <label>Burst Time:</label>
                         <input type="number" id="burstTime${i}" placeholder="Enter in Milliseconds" required>
                         ${document.getElementById('algorithm').value === 'Priority' ? `
-                         <br><br>   <label>Priority (Lower number = Higher priority):</label>
+                            <label>Priority (Lower number = Higher priority):</label>
                             <input type="number" id="priority${i}" value="1" required>
                         ` : ''}
                     </div>
                 `;
             }
         }
-        
 
-function simulate() {
-    processes = [];
-    const numProcesses = document.getElementById('numProcesses').value;
+        function simulate() {
+            processes = [];
+            const numProcesses = document.getElementById('numProcesses').value;
 
-    for (let i = 0; i < numProcesses; i++) {
-        const arrivalTime = parseInt(document.getElementById(`arrivalTime${i}`).value) || 0;
-        const burstTime = parseInt(document.getElementById(`burstTime${i}`).value);
-        const priority = document.getElementById('algorithm').value === 'Priority' ? parseInt(document.getElementById(`priority${i}`).value) || 1 : null;
-        
-        processes.push({
-            pid: i + 1,
-            arrivalTime,
-            burstTime,
-            priority,
-            remainingTime: burstTime,
-            completionTime: 0,
-            turnaroundTime: 0,
-            waitingTime: 0
-        });
-    }
-    
+            for (let i = 0; i < numProcesses; i++) {
+                const arrivalTime = parseInt(document.getElementById(`arrivalTime${i}`).value) || 0;
+                const burstTime = parseInt(document.getElementById(`burstTime${i}`).value);
+                const priority = document.getElementById('algorithm').value === 'Priority' ? parseInt(document.getElementById(`priority${i}`).value) || 1 : null;
 
-    const algorithm = document.getElementById('algorithm').value;
-    const isPreemptive = document.querySelector('input[name="preemptive"]:checked').value === "true";
+                processes.push({
+                    pid: i + 1,
+                    arrivalTime,
+                    burstTime,
+                    priority,
+                    remainingTime: burstTime,
+                    completionTime: 0,
+                    turnaroundTime: 0,
+                    waitingTime: 0
+                });
+            }
 
-    let avgTAT;
-    if (algorithm === 'FCFS') {
-        avgTAT = calculateFCFS();
-    } else if (algorithm === 'SJF') {
-        avgTAT = isPreemptive ? calculatePreemptiveSJF() : calculateSJF();
-    } else if (algorithm === 'Priority') {
-        avgTAT = isPreemptive ? calculatePreemptivePriority() : calculatePriorityScheduling();
-    } else if (algorithm === 'RR') {
-        avgTAT = calculateRoundRobin();
-    }
+            const algorithm = document.getElementById('algorithm').value;
+            const isPreemptive = document.querySelector('input[name="preemptive"]:checked').value === "true";
 
-    displayResults(avgTAT);
-}
+            let avgTAT;
+            if (algorithm === 'FCFS') {
+                avgTAT = calculateFCFS();
+            } else if (algorithm === 'SJF') {
+                avgTAT = isPreemptive ? calculatePreemptiveSJF() : calculateSJF();
+            } else if (algorithm === 'Priority') {
+                avgTAT = isPreemptive ? calculatePreemptivePriority() : calculatePriorityScheduling();
+            } else if (algorithm === 'RR') {
+                const quantum = parseInt(document.getElementById('timeQuantum').value) || 2;
+                avgTAT = calculateRoundRobin(quantum);
+            }
 
-function calculateFCFS() {
-    let currentTime = 0;
-
-    processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
-
-    for (const process of processes) {
-        if (currentTime < process.arrivalTime) {
-            currentTime = process.arrivalTime;
-        }
-        currentTime += process.burstTime;
-        process.completionTime = currentTime;
-        process.turnaroundTime = process.completionTime - process.arrivalTime;
-        process.waitingTime = process.turnaroundTime - process.burstTime;
-    }
-
-    const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
-    return totalTAT / processes.length; 
-}
-
-function calculateSJF() {
-    let currentTime = 0;
-
-    processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
-
-    while (processes.length > 0) {
-        const availableProcesses = processes.filter(p => p.arrivalTime <= currentTime);
-        if (availableProcesses.length === 0) {
-            currentTime++;
-            continue;
+            displayResults(avgTAT);
         }
 
-        availableProcesses.sort((a, b) => a.burstTime - b.burstTime);
-        const process = availableProcesses[0];
+        function calculateRoundRobin(quantum) {
+            let currentTime = 0;
+            const queue = [];
+            const ganttChart = [];
+            let processesLeft = processes.length;
 
-        processes = processes.filter(p => p.pid !== process.pid);
-        currentTime += process.burstTime;
-        process.completionTime = currentTime;
-        process.turnaroundTime = process.completionTime - process.arrivalTime;
-        process.waitingTime = process.turnaroundTime - process.burstTime;
-    }
+            while (processesLeft > 0) {
+                // Add arrived processes to the queue
+                for (let process of processes) {
+                    if (process.arrivalTime <= currentTime && process.remainingTime > 0 && !queue.includes(process)) {
+                        queue.push(process);
+                    }
+                }
 
-    const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
-    return totalTAT / processes.length; // Average Turnaround Time
-}
+                if (queue.length === 0) {
+                    currentTime++; // No process is ready, move time forward
+                    continue;
+                }
 
-function calculatePreemptiveSJF() {
-    let currentTime = 0;
-    let completedProcesses = 0;
+                const process = queue.shift();
+                const timeSlice = Math.min(process.remainingTime, quantum);
+                process.remainingTime -= timeSlice;
+                ganttChart.push({ pid: process.pid, time: timeSlice });
+                currentTime += timeSlice;
 
-    while (completedProcesses < processes.length) {
-        const availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.remainingTime > 0);
-        if (availableProcesses.length === 0) {
-            currentTime++;
-            continue;
+                if (process.remainingTime === 0) {
+                    process.completionTime = currentTime;
+                    process.turnaroundTime = process.completionTime - process.arrivalTime;
+                    process.waitingTime = process.turnaroundTime - process.burstTime;
+                    processesLeft--;
+                } else {
+                    queue.push(process); // Re-add the process to the end of the queue
+                }
+            }
+
+            // Update the processes array with final values
+            for (const process of processes) {
+                if (process.remainingTime === 0) {
+                    process.turnaroundTime = process.completionTime - process.arrivalTime;
+                    process.waitingTime = process.turnaroundTime - process.burstTime;
+                }
+            }
+
+            // Calculate average turnaround time
+            const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
+            drawGanttChart(ganttChart);
+            return totalTAT / processes.length; 
         }
 
-        availableProcesses.sort((a, b) => a.remainingTime - b.remainingTime);
-        const process = availableProcesses[0];
+        function drawGanttChart(ganttChart) {
+            const ganttDiv = document.getElementById('ganttChart');
+            ganttDiv.innerHTML = '<h3>Gantt Chart:</h3>';
+            let chart = '';
 
-        process.remainingTime--;
-        if (process.remainingTime === 0) {
-            process.completionTime = currentTime + 1;
-            process.turnaroundTime = process.completionTime - process.arrivalTime;
-            process.waitingTime = process.turnaroundTime - process.burstTime;
-            completedProcesses++;
+            const colors = ['#4CAF50', '#FF5733', '#33B5E5', '#FFC300', '#8E44AD', '#E74C3C'];
+
+            ganttChart.forEach((entry, index) => {
+                const color = colors[(entry.pid - 1) % colors.length];
+                chart += `<div class="bar" style="width:${entry.time * 20}px; background-color: ${color}">${entry.pid}</div>`;
+            });
+
+            ganttDiv.innerHTML += `<div style="display: flex; justify-content: center;">${chart}</div>`;
         }
 
-        currentTime++;
-    }
-
-    const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
-    return totalTAT / processes.length; 
-}
-
-function calculatePriorityScheduling() {
-    let currentTime = 0;
-
-    processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
-
-    while (processes.length > 0) {
-        const availableProcesses = processes.filter(p => p.arrivalTime <= currentTime);
-        if (availableProcesses.length === 0) {
-            currentTime++;
-            continue;
+        function displayResults(avgTAT) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `Average Turnaround Time: ${avgTAT.toFixed(2)}<br>`;
+            resultsDiv.innerHTML += `Average Waiting Time: ${calculateAverageWT().toFixed(2)}<br>`;
         }
 
-        availableProcesses.sort((a, b) => a.priority - b.priority);
-        const process = availableProcesses[0];
-
-        processes = processes.filter(p => p.pid !== process.pid);
-        currentTime += process.burstTime;
-        process.completionTime = currentTime;
-        process.turnaroundTime = process.completionTime - process.arrivalTime;
-        process.waitingTime = process.turnaroundTime - process.burstTime;
-    }
-
-    const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
-    return totalTAT / processes.length; 
-}
-
-function calculatePreemptivePriority() {
-    let currentTime = 0;
-    let completedProcesses = 0;
-
-    while (completedProcesses < processes.length) {
-        const availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.remainingTime > 0);
-        if (availableProcesses.length === 0) {
-            currentTime++;
-            continue;
+        function calculateAverageWT() {
+            const totalWT = processes.reduce((sum, p) => sum + p.waitingTime, 0);
+            return totalWT / processes.length; 
         }
-
-        availableProcesses.sort((a, b) => a.priority - b.priority);
-        const process = availableProcesses[0];
-
-        process.remainingTime--;
-        if (process.remainingTime === 0) {
-            process.completionTime = currentTime + 1;
-            process.turnaroundTime = process.completionTime - process.arrivalTime;
-            process.waitingTime = process.turnaroundTime - process.burstTime;
-            completedProcesses++;
-        }
-
-        currentTime++;
-    }
-
-    const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
-    return totalTAT / processes.length; 
-}
-
-function calculateRoundRobin() {
-    const quantum = 2; 
-    let currentTime = 0;
-    const queue = [...processes];
-
-    while (queue.length > 0) {
-        const process = queue.shift();
-
-        if (process.arrivalTime > currentTime) {
-            currentTime = process.arrivalTime;
-        }
-
-        const timeSlice = Math.min(process.remainingTime, quantum);
-        process.remainingTime -= timeSlice;
-        currentTime += timeSlice;
-
-        if (process.remainingTime === 0) {
-            process.completionTime = currentTime;
-            process.turnaroundTime = process.completionTime - process.arrivalTime;
-            process.waitingTime = process.turnaroundTime - process.burstTime;
-        } else {
-            queue.push(process);
-        }
-    }
-
-    const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
-    return totalTAT / processes.length; 
-}
-
-function displayResults(avgTAT) {
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = `Average Turnaround Time: ${avgTAT.toFixed(2)}<br>`;
-    resultsDiv.innerHTML += `Average Waiting Time: ${calculateAverageWT().toFixed(2)}<br>`;
-    drawGanttChart();
-}
-
-function calculateAverageWT() {
-    const totalWT = processes.reduce((sum, p) => sum + p.waitingTime, 0);
-    return totalWT / processes.length; 
-}
-function drawGanttChart() {
-    const ganttDiv = document.getElementById('ganttChart');
-    ganttDiv.innerHTML = '<h3>Gantt Chart:</h3>';
-    let chart = '';
-
-    
-    const colors = ['#4CAF50', '#FF5733', '#33B5E5', '#FFC300', '#8E44AD', '#E74C3C'];
-
-    processes.forEach((process, index) => {
-        const color = colors[index % colors.length]; 
-        chart += `<div class="bar" style="width:${process.burstTime * 20}px; background-color: ${color}">${process.pid}</div>`;
-    });
-
-    ganttDiv.innerHTML += `<div style="display: flex; justify-content: center;">${chart}</div>`;
-}
-
-
     </script>
 </body>
 </html>
