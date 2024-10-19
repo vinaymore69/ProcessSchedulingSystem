@@ -16,13 +16,22 @@
         #ganttChart {
             margin-top: 20px;
             font-family: 'Moon Walk', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            padding: 20px;
+            flex-wrap: wrap;
         }
         .bar {
             color: white;
             text-align: center;
             padding: 5px;
             margin-right: 2px;
-            display: inline-block; 
+            display: inline-block;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: bold;
         }
         h1 {
             font-size: 60px;
@@ -61,7 +70,7 @@
     <h1>Process Scheduling Simulator</h1>
     <div>
         <label>Number of Processes: </label>
-        <input type="number" id="numProcesses" min="1">
+        <input type="number" id="numProcesses" min="1" required>
         <button onclick="createProcessInputs()">Create Inputs</button>
     </div>
     <div>
@@ -70,14 +79,9 @@
             <option value="FCFS">First-Come, First-Served (FCFS)</option>
             <option value="SJF">Shortest Job First (SJF)</option>
             <option value="Priority">Priority Scheduling</option>
-            <option value="RR">Round Robin (Preemptive)</option>
         </select>
     </div>
-    <div id="quantumInput" style="display: none;">
-        <label for="timeQuantum">Enter Time Quantum (in milliseconds):</label>
-        <input type="number" id="timeQuantum" value="2" min="1">
-    </div>
-    <div>
+    <div id="preemptiveOptions" style="display: none;">
         <label>Preemptive Scheduling:</label>
         <input type="radio" name="preemptive" id="preemptive" value="true"> Yes
         <input type="radio" name="preemptive" id="nonPreemptive" value="false" checked> No
@@ -90,10 +94,13 @@
     <script>
         let processes = [];
 
-        // Show/hide the quantum input based on algorithm selection
         document.getElementById('algorithm').addEventListener('change', function() {
-            const quantumInputDiv = document.getElementById('quantumInput');
-            quantumInputDiv.style.display = this.value === 'RR' ? 'block' : 'none';
+            const preemptiveOptionsDiv = document.getElementById('preemptiveOptions');
+            if (this.value === 'SJF' || this.value === 'Priority') {
+                preemptiveOptionsDiv.style.display = 'block';
+            } else {
+                preemptiveOptionsDiv.style.display = 'none';
+            }
         });
 
         function createProcessInputs() {
@@ -124,6 +131,10 @@
             for (let i = 0; i < numProcesses; i++) {
                 const arrivalTime = parseInt(document.getElementById(`arrivalTime${i}`).value) || 0;
                 const burstTime = parseInt(document.getElementById(`burstTime${i}`).value);
+                if (isNaN(burstTime) || burstTime <= 0) {
+                    alert(`Please enter a valid Burst Time for Process ${i + 1}`);
+                    return;
+                }
                 const priority = document.getElementById('algorithm').value === 'Priority' ? parseInt(document.getElementById(`priority${i}`).value) || 1 : null;
 
                 processes.push({
@@ -139,7 +150,7 @@
             }
 
             const algorithm = document.getElementById('algorithm').value;
-            const isPreemptive = document.querySelector('input[name="preemptive"]:checked').value === "true";
+            const isPreemptive = document.querySelector('input[name="preemptive"]:checked')?.value === "true";
 
             let avgTAT;
             if (algorithm === 'FCFS') {
@@ -148,76 +159,289 @@
                 avgTAT = isPreemptive ? calculatePreemptiveSJF() : calculateSJF();
             } else if (algorithm === 'Priority') {
                 avgTAT = isPreemptive ? calculatePreemptivePriority() : calculatePriorityScheduling();
-            } else if (algorithm === 'RR') {
-                const quantum = parseInt(document.getElementById('timeQuantum').value) || 2;
-                avgTAT = calculateRoundRobin(quantum);
             }
 
             displayResults(avgTAT);
+            drawGanttChart();
         }
 
-        function calculateRoundRobin(quantum) {
+        function calculateFCFS() {
             let currentTime = 0;
-            const queue = [];
-            const ganttChart = [];
-            let processesLeft = processes.length;
+            processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
+            processes.forEach(process => {
+                if (currentTime < process.arrivalTime) {
+                    currentTime = process.arrivalTime;
+                }
+                currentTime += process.burstTime;
+                process.completionTime = currentTime;
+                process.turnaroundTime = process.completionTime - process.arrivalTime;
+                process.waitingTime = process.turnaroundTime - process.burstTime;
+            });
 
-            while (processesLeft > 0) {
-                // Add arrived processes to the queue
-                for (let process of processes) {
-                    if (process.arrivalTime <= currentTime && process.remainingTime > 0 && !queue.includes(process)) {
-                        queue.push(process);
+            return calculateAverageTAT();
+        }
+
+        function drawGanttChart() {
+            const ganttChartDiv = document.getElementById('ganttChart');
+            ganttChartDiv.innerHTML = '';
+        
+            processes.forEach(process => {
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                bar.style.width = `${process.burstTime * 10}px`;  // Adjust width scaling as needed
+                bar.style.backgroundColor = getRandomColor();
+                bar.innerHTML = `P${process.pid} (${process.burstTime})`;  // Show process ID and burst time
+                ganttChartDiv.appendChild(bar);
+            });
+        }
+        
+
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+
+        function calculateSJF() {
+            let currentTime = 0;
+            let completedProcesses = 0;
+            let n = processes.length;
+            let ganttChart = []; // To store the execution order for the Gantt chart
+        
+            // Sort processes first by arrival time, and then by burst time in case of ties
+            processes.sort((a, b) => {
+                if (a.arrivalTime === b.arrivalTime) {
+                    return a.burstTime - b.burstTime; // If arrival times are the same, sort by burst time
+                } else {
+                    return a.arrivalTime - b.arrivalTime; // Sort by arrival time
+                }
+            });
+        
+            while (completedProcesses < n) {
+                // Get all available processes that have arrived and are not yet completed
+                let availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.completionTime === 0);
+                
+                if (availableProcesses.length > 0) {
+                    // Sort available processes by burst time to choose the shortest job
+                    availableProcesses.sort((a, b) => a.burstTime - b.burstTime);
+                    let selectedProcess = availableProcesses[0];  // Select the process with the shortest burst time
+        
+                    // Record the selected process for the Gantt chart
+                    ganttChart.push({
+                        pid: selectedProcess.pid,
+                        startTime: currentTime,
+                        endTime: currentTime + selectedProcess.burstTime
+                    });
+        
+                    // Execute the selected process
+                    currentTime += selectedProcess.burstTime;
+                    selectedProcess.completionTime = currentTime;
+                    selectedProcess.turnaroundTime = selectedProcess.completionTime - selectedProcess.arrivalTime;
+                    selectedProcess.waitingTime = selectedProcess.turnaroundTime - selectedProcess.burstTime;
+                    completedProcesses++;
+        
+                } else {
+                    // If no processes are ready to execute, increment time
+                    currentTime++;
+                }
+            }
+        
+            // Call the function to draw the Gantt chart based on the execution sequence
+            drawSJFGanttChart(ganttChart);
+        
+            return calculateAverageTAT();
+        }
+        
+        // Function to draw the Gantt chart specifically for SJF
+        function drawSJFGanttChart(ganttChart) {
+            const ganttChartDiv = document.getElementById('ganttChart');
+            ganttChartDiv.innerHTML = ''; // Clear the previous Gantt chart
+        
+            ganttChart.forEach(slot => {
+                const bar = document.createElement('div');
+                bar.className = 'gantt-bar'; // Class for styling the Gantt chart bar
+                bar.style.width = `${(slot.endTime - slot.startTime) * 50}px`; // Scale the width based on execution time
+                bar.style.backgroundColor = '#28a745'; // Color to represent the process
+                bar.innerText = `P${slot.pid} (${slot.startTime}-${slot.endTime})`; // Label for process and time interval
+                ganttChartDiv.appendChild(bar);
+            });
+        }
+        
+        function calculatePreemptiveSJF() {
+            let currentTime = 0;
+            let completedProcesses = 0;
+            let n = processes.length;
+            let ganttChart = []; // To store execution order for the Gantt chart
+        
+            // Initialize remaining time for each process
+            processes.forEach(process => {
+                process.remainingTime = process.burstTime; // Assuming burstTime is defined for each process
+            });
+        
+            // Sort processes by arrival time initially
+            processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
+        
+            while (completedProcesses < n) {
+                // Filter processes that have arrived and are not yet completed
+                let availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.remainingTime > 0);
+        
+                if (availableProcesses.length > 0) {
+                    // Sort available processes by remaining time to choose the shortest job
+                    availableProcesses.sort((a, b) => a.remainingTime - b.remainingTime);
+                    let selectedProcess = availableProcesses[0];  // Select the process with the shortest remaining time
+        
+                    // Execute the selected process for 1 unit of time
+                    ganttChart.push(selectedProcess.pid); // Record the process in the Gantt chart
+                    currentTime++;
+                    selectedProcess.remainingTime--;
+        
+                    // If the process is completed
+                    if (selectedProcess.remainingTime === 0) {
+                        selectedProcess.completionTime = currentTime;
+                        selectedProcess.turnaroundTime = selectedProcess.completionTime - selectedProcess.arrivalTime;
+                        selectedProcess.waitingTime = selectedProcess.turnaroundTime - selectedProcess.burstTime;
+                        completedProcesses++;
                     }
+                } else {
+                    // If no process is ready, increment time
+                    ganttChart.push(null); // Idle time in Gantt chart
+                    currentTime++;
                 }
-
-                if (queue.length === 0) {
-                    currentTime++; // No process is ready, move time forward
-                    continue;
+            }
+        
+            // Call the function to draw the Gantt chart based on the execution sequence
+            drawPreemptiveSJFGanttChart(ganttChart); // Updated function name
+            return calculateAverageTAT();
+        }
+        
+        // Separate function for drawing the Gantt chart for Preemptive SJF
+        function drawPreemptiveSJFGanttChart(ganttChart) {
+            const ganttChartDiv = document.getElementById('ganttChart');
+            ganttChartDiv.innerHTML = ''; // Clear the previous Gantt chart
+        
+            let lastProcessId = null;
+            let startTime = 0;
+        
+            ganttChart.forEach((pid, index) => {
+                const bar = document.createElement('div');
+                bar.className = 'gantt-bar'; // Class for styling the Gantt chart bar
+        
+                if (pid !== null) {
+                    // If there's a process running
+                    if (lastProcessId !== pid) {
+                        // If the process has changed, record the start time of the new process
+                        lastProcessId = pid;
+                        startTime = index;
+                    }
+                    // Set width based on 50 pixels per time unit
+                    bar.style.width = '50px'; 
+                    bar.style.backgroundColor = '#28a745'; // Color to represent the process
+                    bar.innerText = `P${pid}`; // Label for process
+                } else {
+                    // Idle time
+                    bar.style.width = '50px';
+                    bar.style.backgroundColor = '#ccc'; // Color for idle time
+                    bar.innerText = 'Idle';
                 }
+        
+                ganttChartDiv.appendChild(bar);
+            });
+        }
+        
+        
 
-                const process = queue.shift();
-                const timeSlice = Math.min(process.remainingTime, quantum);
-                process.remainingTime -= timeSlice;
-                ganttChart.push({ pid: process.pid, time: timeSlice });
-                currentTime += timeSlice;
-
-                if (process.remainingTime === 0) {
+        function calculatePriorityScheduling() {
+            let currentTime = 0;
+            let completedProcesses = 0;
+            let n = processes.length;
+        
+            // Sort processes by arrival time first, then by priority (lower number = higher priority)
+            processes.sort((a, b) => {
+                if (a.arrivalTime === b.arrivalTime) {
+                    return a.priority - b.priority; // Higher priority (lower number) comes first
+                }
+                return a.arrivalTime - b.arrivalTime; // Otherwise, sort by arrival time
+            });
+        
+            while (completedProcesses < n) {
+                // Filter processes that have arrived and are not yet completed
+                let availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.completionTime === 0);
+                
+                if (availableProcesses.length > 0) {
+                    // Pick the process with the highest priority (lowest priority number)
+                    availableProcesses.sort((a, b) => a.priority - b.priority);
+                    let process = availableProcesses[0];  // Process with highest priority
+        
+                    // Execute the process
+                    currentTime += process.burstTime;
                     process.completionTime = currentTime;
                     process.turnaroundTime = process.completionTime - process.arrivalTime;
                     process.waitingTime = process.turnaroundTime - process.burstTime;
-                    processesLeft--;
+                    completedProcesses++;
+        
                 } else {
-                    queue.push(process); // Re-add the process to the end of the queue
+                    // If no process is ready, increment the time
+                    currentTime++;
                 }
             }
-
-            // Update the processes array with final values
-            for (const process of processes) {
-                if (process.remainingTime === 0) {
-                    process.turnaroundTime = process.completionTime - process.arrivalTime;
-                    process.waitingTime = process.turnaroundTime - process.burstTime;
-                }
-            }
-
-            // Calculate average turnaround time
-            const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
-            drawGanttChart(ganttChart);
-            return totalTAT / processes.length; 
+        
+            return calculateAverageTAT();
         }
+        
 
-        function drawGanttChart(ganttChart) {
-            const ganttDiv = document.getElementById('ganttChart');
-            ganttDiv.innerHTML = '<h3>Gantt Chart:</h3>';
-            let chart = '';
 
-            const colors = ['#4CAF50', '#FF5733', '#33B5E5', '#FFC300', '#8E44AD', '#E74C3C'];
 
-            ganttChart.forEach((entry, index) => {
-                const color = colors[(entry.pid - 1) % colors.length];
-                chart += `<div class="bar" style="width:${entry.time * 20}px; background-color: ${color}">${entry.pid}</div>`;
-            });
+        function calculatePreemptivePriority() {
+            let currentTime = 0;
+            let completedProcesses = 0;
+            let n = processes.length;
+            let ganttChart = []; // To store execution order for the Gantt chart
+        
+            // Sort processes by arrival time initially
+            processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
+        
+            while (completedProcesses < n) {
+                // Filter processes that have arrived and are not yet completed
+                let availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.remainingTime > 0);
+        
+                if (availableProcesses.length > 0) {
+                    // Pick the process with the highest priority (lowest priority number)
+                    availableProcesses.sort((a, b) => a.priority - b.priority);
+                    let process = availableProcesses[0];  // Process with the highest priority
+        
+                    // Execute the process for 1 unit of time
+                    currentTime++;
+                    process.remainingTime--;
+                    ganttChart.push(process.pid); // Record the process in the Gantt chart
+        
+                    // If the process is completed
+                    if (process.remainingTime === 0) {
+                        process.completionTime = currentTime;
+                        process.turnaroundTime = process.completionTime - process.arrivalTime;
+                        process.waitingTime = process.turnaroundTime - process.burstTime;
+                        completedProcesses++;
+                    }
+                } else {
+                    // If no process is ready, increment the time
+                    currentTime++;
+                    ganttChart.push(null); // Idle time in Gantt chart
+                }
+            }
+        
+            drawGanttChart(ganttChart);
+            return calculateAverageTAT();
+        }
+        
 
-            ganttDiv.innerHTML += `<div style="display: flex; justify-content: center;">${chart}</div>`;
+
+
+
+        function calculateAverageTAT() {
+            const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
+            return totalTAT / processes.length; 
         }
 
         function displayResults(avgTAT) {
@@ -230,6 +454,11 @@
             const totalWT = processes.reduce((sum, p) => sum + p.waitingTime, 0);
             return totalWT / processes.length; 
         }
+
+
+
+
+        
     </script>
 </body>
 </html>
