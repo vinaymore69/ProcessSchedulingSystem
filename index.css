@@ -1,0 +1,125 @@
+
+        @import url('https://fonts.googleapis.com/css2?family=Amita:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inconsolata:wght@200..900&display=swap');
+
+        body {
+            font-family: 'Inconsolata';
+            color: aliceblue;
+            text-align: center;
+            background-color: #1d1d1d;
+            padding: 20px;
+        }
+        #ganttChart {
+            margin-top: 20px;
+            font-family: 'Inconsolata';
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+            padding: 20px;
+            flex-wrap: wrap;
+        }
+        .bar {
+            color: white;
+            text-align: center;
+            padding: 5px;
+            margin-right: 2px;
+            display: inline-block;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        h1 {
+            font-size: 65px;
+            font-weight: bolder;
+        }
+        button {
+            padding: 6px 20px;
+            background: white;
+            border-radius: 0px;
+            font-family: Inconsolata;
+            transition: all 0.3s ease-in-out;
+            margin: 10px;
+            border:solid;
+            border-width: thin;
+            border-color: #1d1d1d;
+            height: 35px;
+        }
+        button:hover {
+            cursor: pointer;
+            color: white;
+            background-color: #1d1d1d;
+            border:solid;
+            border-width: thin;
+            border-color: aliceblue;
+            border-radius: 5px;
+        }
+        input, select {
+            padding: 10px;
+            border-radius: 6px;
+            background-color: white;
+            border: none;
+            margin-bottom: 10px;
+            color: rgb(255, 255, 255);
+            border-radius: 0px;
+            background-color: transparent;
+            border:solid;
+            border-width: thin;
+            border-color: aliceblue;
+        }
+        input::placeholder{
+            font-family: 'Inconsolata';
+        }
+        select {
+            background-color: rgb(255, 255, 255);
+            color: #1d1d1d;
+            cursor: pointer;
+            font-family: Inconsolata;
+           
+        }
+        .main{
+            height: auto;
+        }
+
+
+
+        ::selection{
+        background-color: white;
+        color: black;
+        }
+  
+
+        label{
+            font-size: 20px;
+        }
+
+        .gantt-bar {
+            height: 30px; /* Set a height for the bars */
+            margin: 5px 0; /* Add some spacing between bars */
+            visibility: hidden; /* Hide by default */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            font-family: 'Inconsolata';
+        }
+        
+        #resultsTable {
+            width: 100%; /* Full width for the table */
+            border-collapse: collapse; /* Remove space between borders */
+        }
+        
+        #resultsTable th, #resultsTable td {
+            border: 1px solid #ddd; /* Border for table cells */
+            padding: 8px; /* Padding for table cells */
+            text-align: left; /* Align text to the left */
+            transition: all 0.5s; /* Transition for smooth appearance */
+        }
+        
+        #resultsTable tr:nth-child(even) {
+            background-color: #f2f2f2; /* Zebra striping for even rows */
+        }
+        
+        
+
+        
