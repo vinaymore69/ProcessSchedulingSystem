@@ -1,21 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Process Scheduling Simulator</title>
-    <style>
+
         @import url('https://fonts.googleapis.com/css2?family=Amita:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inconsolata:wght@200..900&display=swap');
 
         body {
-            font-family: "Amita", sans-serif;
+            font-family: 'Inconsolata';
+            color: aliceblue;
             text-align: center;
-            background-color: #f0f0f0;
+            background-color: #1d1d1d;
             padding: 20px;
         }
         #ganttChart {
             margin-top: 20px;
-            font-family: 'Moon Walk', sans-serif;
+            font-family: 'Inconsolata';
             display: flex;
             justify-content: center;
             align-items: center;
@@ -34,21 +30,29 @@
             font-weight: bold;
         }
         h1 {
-            font-size: 60px;
+            font-size: 65px;
             font-weight: bolder;
         }
         button {
             padding: 6px 20px;
             background: white;
-            border-radius: 5px;
-            font-family: Amita;
-            transition: all 0.5s ease-in-out;
+            border-radius: 0px;
+            font-family: Inconsolata;
+            transition: all 0.3s ease-in-out;
             margin: 10px;
+            border:solid;
+            border-width: thin;
+            border-color: #1d1d1d;
+            height: 35px;
         }
         button:hover {
             cursor: pointer;
             color: white;
-            background-color: black;
+            background-color: #1d1d1d;
+            border:solid;
+            border-width: thin;
+            border-color: aliceblue;
+            border-radius: 5px;
         }
         input, select {
             padding: 10px;
@@ -56,409 +60,66 @@
             background-color: white;
             border: none;
             margin-bottom: 10px;
-            color: black;
+            color: rgb(255, 255, 255);
+            border-radius: 0px;
+            background-color: transparent;
+            border:solid;
+            border-width: thin;
+            border-color: aliceblue;
+        }
+        input::placeholder{
+            font-family: 'Inconsolata';
         }
         select {
-            background-color: black;
-            color: aliceblue;
+            background-color: rgb(255, 255, 255);
+            color: #1d1d1d;
             cursor: pointer;
-            font-family: Amita;
+            font-family: Inconsolata;
+           
         }
-    </style>
-</head>
-<body>
-    <h1>Process Scheduling Simulator</h1>
-    <div>
-        <label>Number of Processes: </label>
-        <input type="number" id="numProcesses" min="1" required>
-        <button onclick="createProcessInputs()">Create Inputs</button>
-    </div>
-    <div>
-        <label>Select Scheduling Algorithm:</label>
-        <select id="algorithm">
-            <option value="FCFS">First-Come, First-Served (FCFS)</option>
-            <option value="SJF">Shortest Job First (SJF)</option>
-            <option value="Priority">Priority Scheduling</option>
-        </select>
-    </div>
-    <div id="preemptiveOptions" style="display: none;">
-        <label>Preemptive Scheduling:</label>
-        <input type="radio" name="preemptive" id="preemptive" value="true"> Yes
-        <input type="radio" name="preemptive" id="nonPreemptive" value="false" checked> No
-    </div>
-    <div id="processInputs"></div>
-    <button onclick="simulate()">Simulate</button>
-    <div id="results"></div>
-    <div id="ganttChart"></div>
-
-    <script>
-        let processes = [];
-
-        document.getElementById('algorithm').addEventListener('change', function() {
-            const preemptiveOptionsDiv = document.getElementById('preemptiveOptions');
-            if (this.value === 'SJF' || this.value === 'Priority') {
-                preemptiveOptionsDiv.style.display = 'block';
-            } else {
-                preemptiveOptionsDiv.style.display = 'none';
-            }
-        });
-
-        function createProcessInputs() {
-            const numProcesses = document.getElementById('numProcesses').value;
-            const processInputsDiv = document.getElementById('processInputs');
-            processInputsDiv.innerHTML = '';
-
-            for (let i = 0; i < numProcesses; i++) {
-                processInputsDiv.innerHTML += `
-                    <div>
-                        <label>Process ${i + 1} Arrival Time:</label>
-                        <input type="number" id="arrivalTime${i}" value="0" required>
-                        <label>Burst Time:</label>
-                        <input type="number" id="burstTime${i}" placeholder="Enter in Milliseconds" required>
-                        ${document.getElementById('algorithm').value === 'Priority' ? `
-                            <label>Priority (Lower number = Higher priority):</label>
-                            <input type="number" id="priority${i}" value="1" required>
-                        ` : ''}
-                    </div>
-                `;
-            }
-        }
-
-        function simulate() {
-            processes = [];
-            const numProcesses = document.getElementById('numProcesses').value;
-
-            for (let i = 0; i < numProcesses; i++) {
-                const arrivalTime = parseInt(document.getElementById(`arrivalTime${i}`).value) || 0;
-                const burstTime = parseInt(document.getElementById(`burstTime${i}`).value);
-                if (isNaN(burstTime) || burstTime <= 0) {
-                    alert(`Please enter a valid Burst Time for Process ${i + 1}`);
-                    return;
-                }
-                const priority = document.getElementById('algorithm').value === 'Priority' ? parseInt(document.getElementById(`priority${i}`).value) || 1 : null;
-
-                processes.push({
-                    pid: i + 1,
-                    arrivalTime,
-                    burstTime,
-                    priority,
-                    remainingTime: burstTime,
-                    completionTime: 0,
-                    turnaroundTime: 0,
-                    waitingTime: 0
-                });
-            }
-
-            const algorithm = document.getElementById('algorithm').value;
-            const isPreemptive = document.querySelector('input[name="preemptive"]:checked')?.value === "true";
-
-            let avgTAT;
-            if (algorithm === 'FCFS') {
-                avgTAT = calculateFCFS();
-            } else if (algorithm === 'SJF') {
-                avgTAT = isPreemptive ? calculatePreemptiveSJF() : calculateSJF();
-            } else if (algorithm === 'Priority') {
-                avgTAT = isPreemptive ? calculatePreemptivePriority() : calculatePriorityScheduling();
-            }
-
-            displayResults(avgTAT);
-            drawGanttChart();
-        }
-
-        function calculateFCFS() {
-            let currentTime = 0;
-            processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
-            processes.forEach(process => {
-                if (currentTime < process.arrivalTime) {
-                    currentTime = process.arrivalTime;
-                }
-                currentTime += process.burstTime;
-                process.completionTime = currentTime;
-                process.turnaroundTime = process.completionTime - process.arrivalTime;
-                process.waitingTime = process.turnaroundTime - process.burstTime;
-            });
-
-            return calculateAverageTAT();
-        }
-
-        function drawGanttChart() {
-            const ganttChartDiv = document.getElementById('ganttChart');
-            ganttChartDiv.innerHTML = '';
-        
-            processes.forEach(process => {
-                const bar = document.createElement('div');
-                bar.className = 'bar';
-                bar.style.width = `${process.burstTime * 10}px`;  // Adjust width scaling as needed
-                bar.style.backgroundColor = getRandomColor();
-                bar.innerHTML = `P${process.pid} (${process.burstTime})`;  // Show process ID and burst time
-                ganttChartDiv.appendChild(bar);
-            });
-        }
-        
-
-        function getRandomColor() {
-            const letters = '0123456789ABCDEF';
-            let color = '#';
-            for (let i = 0; i < 6; i++) {
-                color += letters[Math.floor(Math.random() * 16)];
-            }
-            return color;
-        }
-
-        function calculateSJF() {
-            let currentTime = 0;
-            let completedProcesses = 0;
-            let n = processes.length;
-            let ganttChart = []; // To store the execution order for the Gantt chart
-        
-            // Sort processes first by arrival time, and then by burst time in case of ties
-            processes.sort((a, b) => {
-                if (a.arrivalTime === b.arrivalTime) {
-                    return a.burstTime - b.burstTime; // If arrival times are the same, sort by burst time
-                } else {
-                    return a.arrivalTime - b.arrivalTime; // Sort by arrival time
-                }
-            });
-        
-            while (completedProcesses < n) {
-                // Get all available processes that have arrived and are not yet completed
-                let availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.completionTime === 0);
-                
-                if (availableProcesses.length > 0) {
-                    // Sort available processes by burst time to choose the shortest job
-                    availableProcesses.sort((a, b) => a.burstTime - b.burstTime);
-                    let selectedProcess = availableProcesses[0];  // Select the process with the shortest burst time
-        
-                    // Record the selected process for the Gantt chart
-                    ganttChart.push({
-                        pid: selectedProcess.pid,
-                        startTime: currentTime,
-                        endTime: currentTime + selectedProcess.burstTime
-                    });
-        
-                    // Execute the selected process
-                    currentTime += selectedProcess.burstTime;
-                    selectedProcess.completionTime = currentTime;
-                    selectedProcess.turnaroundTime = selectedProcess.completionTime - selectedProcess.arrivalTime;
-                    selectedProcess.waitingTime = selectedProcess.turnaroundTime - selectedProcess.burstTime;
-                    completedProcesses++;
-        
-                } else {
-                    // If no processes are ready to execute, increment time
-                    currentTime++;
-                }
-            }
-        
-            // Call the function to draw the Gantt chart based on the execution sequence
-            drawSJFGanttChart(ganttChart);
-        
-            return calculateAverageTAT();
-        }
-        
-        // Function to draw the Gantt chart specifically for SJF
-        function drawSJFGanttChart(ganttChart) {
-            const ganttChartDiv = document.getElementById('ganttChart');
-            ganttChartDiv.innerHTML = ''; // Clear the previous Gantt chart
-        
-            ganttChart.forEach(slot => {
-                const bar = document.createElement('div');
-                bar.className = 'gantt-bar'; // Class for styling the Gantt chart bar
-                bar.style.width = `${(slot.endTime - slot.startTime) * 50}px`; // Scale the width based on execution time
-                bar.style.backgroundColor = '#28a745'; // Color to represent the process
-                bar.innerText = `P${slot.pid} (${slot.startTime}-${slot.endTime})`; // Label for process and time interval
-                ganttChartDiv.appendChild(bar);
-            });
-        }
-        
-        function calculatePreemptiveSJF() {
-            let currentTime = 0;
-            let completedProcesses = 0;
-            let n = processes.length;
-            let ganttChart = []; // To store execution order for the Gantt chart
-        
-            // Initialize remaining time for each process
-            processes.forEach(process => {
-                process.remainingTime = process.burstTime; // Assuming burstTime is defined for each process
-            });
-        
-            // Sort processes by arrival time initially
-            processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
-        
-            while (completedProcesses < n) {
-                // Filter processes that have arrived and are not yet completed
-                let availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.remainingTime > 0);
-        
-                if (availableProcesses.length > 0) {
-                    // Sort available processes by remaining time to choose the shortest job
-                    availableProcesses.sort((a, b) => a.remainingTime - b.remainingTime);
-                    let selectedProcess = availableProcesses[0];  // Select the process with the shortest remaining time
-        
-                    // Execute the selected process for 1 unit of time
-                    ganttChart.push(selectedProcess.pid); // Record the process in the Gantt chart
-                    currentTime++;
-                    selectedProcess.remainingTime--;
-        
-                    // If the process is completed
-                    if (selectedProcess.remainingTime === 0) {
-                        selectedProcess.completionTime = currentTime;
-                        selectedProcess.turnaroundTime = selectedProcess.completionTime - selectedProcess.arrivalTime;
-                        selectedProcess.waitingTime = selectedProcess.turnaroundTime - selectedProcess.burstTime;
-                        completedProcesses++;
-                    }
-                } else {
-                    // If no process is ready, increment time
-                    ganttChart.push(null); // Idle time in Gantt chart
-                    currentTime++;
-                }
-            }
-        
-            // Call the function to draw the Gantt chart based on the execution sequence
-            drawPreemptiveSJFGanttChart(ganttChart); // Updated function name
-            return calculateAverageTAT();
-        }
-        
-        // Separate function for drawing the Gantt chart for Preemptive SJF
-        function drawPreemptiveSJFGanttChart(ganttChart) {
-            const ganttChartDiv = document.getElementById('ganttChart');
-            ganttChartDiv.innerHTML = ''; // Clear the previous Gantt chart
-        
-            let lastProcessId = null;
-            let startTime = 0;
-        
-            ganttChart.forEach((pid, index) => {
-                const bar = document.createElement('div');
-                bar.className = 'gantt-bar'; // Class for styling the Gantt chart bar
-        
-                if (pid !== null) {
-                    // If there's a process running
-                    if (lastProcessId !== pid) {
-                        // If the process has changed, record the start time of the new process
-                        lastProcessId = pid;
-                        startTime = index;
-                    }
-                    // Set width based on 50 pixels per time unit
-                    bar.style.width = '50px'; 
-                    bar.style.backgroundColor = '#28a745'; // Color to represent the process
-                    bar.innerText = `P${pid}`; // Label for process
-                } else {
-                    // Idle time
-                    bar.style.width = '50px';
-                    bar.style.backgroundColor = '#ccc'; // Color for idle time
-                    bar.innerText = 'Idle';
-                }
-        
-                ganttChartDiv.appendChild(bar);
-            });
-        }
-        
-        
-
-        function calculatePriorityScheduling() {
-            let currentTime = 0;
-            let completedProcesses = 0;
-            let n = processes.length;
-        
-            // Sort processes by arrival time first, then by priority (lower number = higher priority)
-            processes.sort((a, b) => {
-                if (a.arrivalTime === b.arrivalTime) {
-                    return a.priority - b.priority; // Higher priority (lower number) comes first
-                }
-                return a.arrivalTime - b.arrivalTime; // Otherwise, sort by arrival time
-            });
-        
-            while (completedProcesses < n) {
-                // Filter processes that have arrived and are not yet completed
-                let availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.completionTime === 0);
-                
-                if (availableProcesses.length > 0) {
-                    // Pick the process with the highest priority (lowest priority number)
-                    availableProcesses.sort((a, b) => a.priority - b.priority);
-                    let process = availableProcesses[0];  // Process with highest priority
-        
-                    // Execute the process
-                    currentTime += process.burstTime;
-                    process.completionTime = currentTime;
-                    process.turnaroundTime = process.completionTime - process.arrivalTime;
-                    process.waitingTime = process.turnaroundTime - process.burstTime;
-                    completedProcesses++;
-        
-                } else {
-                    // If no process is ready, increment the time
-                    currentTime++;
-                }
-            }
-        
-            return calculateAverageTAT();
-        }
-        
-
-
-
-        function calculatePreemptivePriority() {
-            let currentTime = 0;
-            let completedProcesses = 0;
-            let n = processes.length;
-            let ganttChart = []; // To store execution order for the Gantt chart
-        
-            // Sort processes by arrival time initially
-            processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
-        
-            while (completedProcesses < n) {
-                // Filter processes that have arrived and are not yet completed
-                let availableProcesses = processes.filter(p => p.arrivalTime <= currentTime && p.remainingTime > 0);
-        
-                if (availableProcesses.length > 0) {
-                    // Pick the process with the highest priority (lowest priority number)
-                    availableProcesses.sort((a, b) => a.priority - b.priority);
-                    let process = availableProcesses[0];  // Process with the highest priority
-        
-                    // Execute the process for 1 unit of time
-                    currentTime++;
-                    process.remainingTime--;
-                    ganttChart.push(process.pid); // Record the process in the Gantt chart
-        
-                    // If the process is completed
-                    if (process.remainingTime === 0) {
-                        process.completionTime = currentTime;
-                        process.turnaroundTime = process.completionTime - process.arrivalTime;
-                        process.waitingTime = process.turnaroundTime - process.burstTime;
-                        completedProcesses++;
-                    }
-                } else {
-                    // If no process is ready, increment the time
-                    currentTime++;
-                    ganttChart.push(null); // Idle time in Gantt chart
-                }
-            }
-        
-            drawGanttChart(ganttChart);
-            return calculateAverageTAT();
-        }
-        
-
-
-
-
-        function calculateAverageTAT() {
-            const totalTAT = processes.reduce((sum, p) => sum + p.turnaroundTime, 0);
-            return totalTAT / processes.length; 
-        }
-
-        function displayResults(avgTAT) {
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = `Average Turnaround Time: ${avgTAT.toFixed(2)}<br>`;
-            resultsDiv.innerHTML += `Average Waiting Time: ${calculateAverageWT().toFixed(2)}<br>`;
-        }
-
-        function calculateAverageWT() {
-            const totalWT = processes.reduce((sum, p) => sum + p.waitingTime, 0);
-            return totalWT / processes.length; 
+        .main{
+            height: auto;
         }
 
 
 
+        ::selection{
+        background-color: white;
+        color: black;
+        }
+  
+
+        label{
+            font-size: 20px;
+        }
+
+        .gantt-bar {
+            height: 30px; /* Set a height for the bars */
+            margin: 5px 0; /* Add some spacing between bars */
+            visibility: hidden; /* Hide by default */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            font-family: 'Inconsolata';
+        }
+        
+        #resultsTable {
+            width: 100%; /* Full width for the table */
+            border-collapse: collapse; /* Remove space between borders */
+        }
+        
+        #resultsTable th, #resultsTable td {
+            border: 1px solid #ddd; /* Border for table cells */
+            padding: 8px; /* Padding for table cells */
+            text-align: left; /* Align text to the left */
+            transition: all 0.5s; /* Transition for smooth appearance */
+        }
+        
+        #resultsTable tr:nth-child(even) {
+            background-color: #f2f2f2; /* Zebra striping for even rows */
+        }
+        
+        
 
         
-    </script>
-</body>
-</html>
