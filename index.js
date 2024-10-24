@@ -68,44 +68,42 @@ function createProcessInputs() {
 
 
 // Function to simulate the scheduling
-function simulate() {
-    const numProcesses = parseInt(document.getElementById('numProcesses').value);
-    const algorithm = document.getElementById('algorithm').value;
-    const processes = [];
+// function simulate() {
+//     const numProcesses = parseInt(document.getElementById('numProcesses').value);
+//     const algorithm = document.getElementById('algorithm').value;
+//     const processes = [];
 
-    for (let i = 0; i < numProcesses; i++) {
-        const arrivalTime = parseInt(document.getElementById(`arrivalTime${i}`).value);
-        const burstTime = parseInt(document.getElementById(`burstTime${i}`).value);
-        const priority = parseInt(document.getElementById(`priority${i}`).value);
+//     for (let i = 0; i < numProcesses; i++) {
+//         const arrivalTime = parseInt(document.getElementById(`arrivalTime${i}`).value);
+//         const burstTime = parseInt(document.getElementById(`burstTime${i}`).value);
+//         const priority = parseInt(document.getElementById(`priority${i}`).value);
 
-        // Create a process object
-        processes.push({
-            id: `P${i + 1}`,
-            arrivalTime,
-            burstTime,
-            priority,
-        });
-    }
+//         // Create a process object
+//         processes.push({
+//             id: `P${i + 1}`,
+//             arrivalTime,
+//             burstTime,
+//             priority,
+//         });
+//     }
 
-    // Call the scheduling algorithm based on the selection
-    let results;
-    switch (algorithm) {
-        case 'FCFS':
-            results = firstComeFirstServe(processes);
-            break;
-        case 'SJF':
-            results = shortestJobFirst(processes);
-            break;
-        case 'Priority':
-            results = priorityScheduling(processes);
-            break;
-        default:
-            results = [];
-    }
+//     // Call the scheduling algorithm based on the selection
+//     let results;
+//     switch (algorithm) {
+//         case 'FCFS':
+//             results = firstComeFirstServe(processes);
+//             break;
+//         case 'SJF':
+//             results = shortestJobFirst(processes);
+//             break;
+//         case 'Priority':
+//             results = priorityScheduling(processes);
+//             break;
+//         default:
+//             results = [];
+//     }
 
-    // Display results
-    displayResults(results);
-}
+// }
 
 // Function for First-Come, First-Served (FCFS) scheduling
 function firstComeFirstServe(processes) {
@@ -199,49 +197,7 @@ function priorityScheduling(processes) {
 }
 
 // Function to display results
-function displayResults(results) {
-    const resultsDiv = document.getElementById('results');
 
-    // Set up the main heading for the results section
-    resultsDiv.innerHTML = `
-        <h2>Simulation Results</h2>
-        <h3>Overview of Process Completion</h3>
-        <table id="resultsTable">
-            <tr>
-                <th>Process</th>
-                <th>Completion Time</th>
-                <th>Turnaround Time</th>
-                <th>Waiting Time</th>
-            </tr>
-        </table>
-    `;
-
-    const resultsTable = document.getElementById('resultsTable');
-
-    results.forEach((result) => {
-        // Create a new row
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td name="resulttext">${result.id}</td>
-            <td name="resulttext">${result.completionTime}</td>
-            <td name="resulttext">${result.turnaroundTime}</td>
-            <td name="resulttext">${result.waitingTime}</td>
-        `;
-
-        resultsTable.appendChild(row);
-    });
-    
-  var result=document.getElementsByName("resulttext");
-  gsap.from(result, {
-    opacity: 0,
-    y: 50,
-    stagger: 0.10,
-    
-    ease: "power2.out",
-    duration: 3
-  });
-
-}
 
 
 
@@ -284,56 +240,167 @@ function sjfScheduling() {
     const ganttChart = [];
     const waitingQueue = [];
 
+    // Sort processes by arrival time
     processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
 
     while (processes.length || waitingQueue.length) {
+        // Add processes to the waiting queue as they arrive
         while (processes.length && processes[0].arrivalTime <= currentTime) {
             waitingQueue.push(processes.shift());
         }
 
         if (waitingQueue.length) {
+            // Sort the waiting queue by burst time (Shortest Job First)
             waitingQueue.sort((a, b) => a.burstTime - b.burstTime);
             const process = waitingQueue.shift();
             ganttChart.push({ id: process.id, start: currentTime, end: currentTime + process.burstTime });
             currentTime += process.burstTime;
         } else {
+            // If no process is ready, the CPU is idle
             ganttChart.push({ id: "Idle", start: currentTime, end: currentTime + 1 });
             currentTime++;
         }
     }
 
-    return ganttChart;
+    // Merge continuous "Idle" states into a single entry
+    return mergeContinuousIdleStates(ganttChart);
 }
 
-// Function to run Preemptive SJF Scheduling
+function mergeContinuousIdleStates(ganttChart) {
+    const mergedGanttChart = [];
+
+    for (let i = 0; i < ganttChart.length; i++) {
+        const currentEntry = ganttChart[i];
+
+        // If the current entry is "Idle" and the previous one was also "Idle", merge them
+        if (mergedGanttChart.length && mergedGanttChart[mergedGanttChart.length - 1].id === "Idle" && currentEntry.id === "Idle") {
+            mergedGanttChart[mergedGanttChart.length - 1].end = currentEntry.end;
+        } else {
+            // Otherwise, push the current entry to the merged Gantt chart
+            mergedGanttChart.push(currentEntry);
+        }
+    }
+
+    return mergedGanttChart;
+}
+
+
+// Function to run Premptive SJF Scheduling
+
 function preemptiveSjfScheduling() {
     let currentTime = 0;
     const ganttChart = [];
-    let remainingProcesses = processes.slice();
+    const waitingQueue = [];
+    const remainingProcesses = processes.map(process => ({ ...process, remainingTime: process.burstTime }));
 
-    while (remainingProcesses.length) {
-        const availableProcesses = remainingProcesses.filter(p => p.arrivalTime <= currentTime);
-        
-        if (availableProcesses.length) {
-            availableProcesses.sort((a, b) => a.remainingTime - b.remainingTime);
-            const process = availableProcesses[0];
+    // Sort processes by arrival time
+    remainingProcesses.sort((a, b) => a.arrivalTime - b.arrivalTime);
 
-            ganttChart.push({ id: process.id, start: currentTime, end: currentTime + 1 });
-            currentTime++;
+    let currentProcess = null;
 
-            process.remainingTime--;
-
-            if (process.remainingTime === 0) {
-                remainingProcesses = remainingProcesses.filter(p => p !== process);
-            }
-        } else {
-            ganttChart.push({ id: "Idle", start: currentTime, end: currentTime + 1 });
-            currentTime++;
+    while (remainingProcesses.length || waitingQueue.length || currentProcess) {
+        // Add processes to the waiting queue as they arrive
+        while (remainingProcesses.length && remainingProcesses[0].arrivalTime <= currentTime) {
+            waitingQueue.push(remainingProcesses.shift());
         }
+
+        // Handle the currently executing process
+        if (currentProcess) {
+            // Decrease the remaining time for the current process
+            ganttChart.push({ id: currentProcess.id, start: currentTime, end: currentTime + 1 });
+            currentProcess.remainingTime--;
+
+            // Check for completion
+            if (currentProcess.remainingTime === 0) {
+                currentProcess = null;
+            }
+        }
+
+        // Check for new processes that may preempt
+        if (waitingQueue.length) {
+            // Sort the waiting queue by remaining time
+            waitingQueue.sort((a, b) => a.remainingTime - b.remainingTime);
+            const nextProcess = waitingQueue[0];
+
+            // If there is a new process with a shorter remaining time
+            if (!currentProcess || nextProcess.remainingTime < currentProcess.remainingTime) {
+                // Preempt the current process if necessary
+                if (currentProcess) {
+                    waitingQueue.push(currentProcess);
+                }
+                currentProcess = waitingQueue.shift(); // Start the new process
+            }
+        }
+
+        // If there's no current process and no new arrivals, add an extended Idle state
+        if (!currentProcess && waitingQueue.length === 0) {
+            let idleStart = currentTime;
+
+            // Increment currentTime to find how long the idle time lasts
+            while (!currentProcess && waitingQueue.length === 0 && remainingProcesses.length) {
+                currentTime++;
+                // Check for arriving processes during the idle time
+                while (remainingProcesses.length && remainingProcesses[0].arrivalTime <= currentTime) {
+                    waitingQueue.push(remainingProcesses.shift());
+                }
+            }
+
+            // Create an Idle entry that spans the full duration
+            ganttChart.push({ id: "Idle", start: idleStart, end: currentTime });
+            currentTime--; // Decrement to adjust for the next loop iteration
+        }
+
+        // Increment the current time
+        currentTime++;
     }
 
-    return ganttChart;
+    // Merge continuous entries in the Gantt chart
+    return mergeContinuousEntries(ganttChart);
 }
+
+// Function to merge continuous entries in the Gantt chart
+function mergeContinuousEntries(ganttChart) {
+    const mergedChart = [];
+    for (let i = 0; i < ganttChart.length; i++) {
+        const current = ganttChart[i];
+        if (mergedChart.length > 0) {
+            const last = mergedChart[mergedChart.length - 1];
+            // Check if the current entry is the same as the last merged entry
+            if (current.id === last.id) {
+                // Merge the time intervals
+                last.end = current.end; // Update the end time of the last merged entry
+            } else {
+                // Push a new entry if it's different
+                mergedChart.push({ ...current });
+            }
+        } else {
+            // First entry, just add it
+            mergedChart.push({ ...current });
+        }
+    }
+    mergedChart.pop();
+    if (mergedChart.length > 0) {
+        for (let i = 0; i < mergedChart.length; i++) {
+            if(!(i==0)){
+            mergedChart[i].start -= 1; // Decrease start time by 1
+            }
+            mergedChart[i].end -= 1;   // Decrease end time by 1
+        }
+    }
+    
+    
+
+    return mergedChart;
+}
+
+
+
+
+
+
+
+
+
 
 // Function to run Priority Scheduling
 function priorityScheduling() {
@@ -341,27 +408,37 @@ function priorityScheduling() {
     const ganttChart = [];
     const waitingQueue = [];
 
+    // Sort processes by arrival time first
     processes.sort((a, b) => a.arrivalTime - b.arrivalTime);
 
     while (processes.length || waitingQueue.length) {
+        // Add processes to the waiting queue as they arrive
         while (processes.length && processes[0].arrivalTime <= currentTime) {
             waitingQueue.push(processes.shift());
         }
 
         if (waitingQueue.length) {
-            waitingQueue.sort((a, b) => a.priority - b.priority);
+            // Sort the waiting queue by priority (lower value means higher priority)
+            waitingQueue.sort((a, b) => a.priority - b.priority || a.arrivalTime - b.arrivalTime);
+            
+            // Get the process with the highest priority (lowest number)
             const process = waitingQueue.shift();
+            
+            // Push the process to the Gantt chart with its start and end time
             ganttChart.push({ id: process.id, start: currentTime, end: currentTime + process.burstTime });
+            
+            // Update the current time based on the burst time of the selected process
             currentTime += process.burstTime;
         } else {
+            // If no process is ready, the CPU is idle
             ganttChart.push({ id: "Idle", start: currentTime, end: currentTime + 1 });
             currentTime++;
         }
     }
 
-    return ganttChart;
+    // Merge continuous "Idle" states into a single entry before returning the chart
+    return mergeContinuousIdleStates(ganttChart);
 }
-
 // Function to run Preemptive Priority Scheduling
 function preemptivePriorityScheduling() {
     let currentTime = 0;
@@ -406,6 +483,9 @@ function simulate() {
             break;
         case "SJF":
             ganttChart = sjfScheduling();
+            break; 
+        case "preSJF":
+            ganttChart = preemptiveSjfScheduling();
             break;
         case "Priority":
             ganttChart = priorityScheduling();
@@ -424,37 +504,200 @@ function getRandomPastelColor() {
     return pastelColor;
 }
 
+// function displayResults(ganttChart) {
+//     const resultsDiv = document.getElementById('results');
+//     const ganttChartDiv = document.getElementById('ganttChart');
+//     resultsDiv.innerHTML = '';
+//     ganttChartDiv.innerHTML = '';
+
+//     ganttChart.forEach((segment, index) => {
+//         const { id, start, end } = segment;
+
+//         // Add result to resultsDiv immediately
+//         resultsDiv.innerHTML += `<div>${id}: ${start} - ${end}</div>`;
+//         resultsDiv.style.fontSize = "20px";
+
+//         // Create the bar but keep it hidden initially
+//         const bar = document.createElement('div');
+//         bar.className = 'gantt-bar';
+//         bar.style.width = `${(end - start) * 10}px`; // Scale the width
+//         bar.style.backgroundColor = id === "Idle" ? 'gray' : getRandomPastelColor(); // Use random pastel color
+//         bar.innerText = id;
+//         bar.style.position = 'relative'; // Position relative for animation
+//         bar.style.transform = 'translateX(100%)'; // Start from the right
+//         bar.style.visibility = 'hidden'; // Hide the bar initially
+//         ganttChartDiv.appendChild(bar);
+
+//         // Use setTimeout to display the bar after the delay
+//         setTimeout(() => {
+//             bar.style.visibility = 'visible'; // Show the bar
+//             bar.style.transition = 'transform 0.5s ease'; // Smooth transition
+//             bar.style.transform = 'translateX(0)'; // Move to original position
+//         }, index * 1000); // Delay of 500 ms for each bar
+//     });
+// }
+
 function displayResults(ganttChart) {
     const resultsDiv = document.getElementById('results');
     const ganttChartDiv = document.getElementById('ganttChart');
     resultsDiv.innerHTML = '';
     ganttChartDiv.innerHTML = '';
 
+    // Create a table element for the results
+    const table = document.createElement('table');
+    table.style.width = '60%';
+    table.style.borderCollapse = 'collapse';
+    table.style.margin = '0 auto'; // This will center the table
+
+
+    // Style the table cells
+    table.querySelectorAll('td, th').forEach(cell => {
+        cell.style.border = '1px solid white'; 
+        cell.style.color = 'white'; 
+    });
+
+    // Create header row
+    const headerRow = document.createElement('tr');
+    const headers = ['ID', 'Start', 'End'];
+
+    headers.forEach(headerText => {
+        const header = document.createElement('th');
+        header.style.border = '1px solid white';
+        header.style.padding = '8px';
+        header.style.fontSize = '20px';
+        header.style.color = 'white'; 
+        header.innerText = headerText;
+        headerRow.appendChild(header);
+    });
+
+    table.appendChild(headerRow);
+
+    // Fill table with Gantt chart data
     ganttChart.forEach((segment, index) => {
         const { id, start, end } = segment;
 
-        // Add result to resultsDiv immediately
-        resultsDiv.innerHTML += `<div>${id}: ${start} - ${end}</div>`;
+        const row = document.createElement('tr');
 
-        // Create the bar but keep it hidden initially
+        [id, start, end].forEach(cellText => {
+            const cell = document.createElement('td');
+            cell.style.border = '1px solid white';
+            cell.style.padding = '8px';
+            cell.style.fontSize = '18px';
+            cell.style.color = 'white'; 
+            cell.innerText = cellText;
+            row.appendChild(cell);
+        });
+
+        table.appendChild(row);
+
+        const barContainer = document.createElement('div');
+        barContainer.style.display = 'flex';
+        barContainer.style.flexDirection = 'column';
+        barContainer.style.alignItems = 'center';
+        barContainer.style.position = 'relative';
+        barContainer.style.margin = '10px 0';
+
         const bar = document.createElement('div');
         bar.className = 'gantt-bar';
-        bar.style.width = `${(end - start) * 10}px`; // Scale the width
-        bar.style.backgroundColor = id === "Idle" ? 'gray' : getRandomPastelColor(); // Use random pastel color
+        bar.style.width = `${(end - start) * 10}px`; 
+        bar.style.backgroundColor = id === "Idle" ? 'gray' : getRandomPastelColor(); 
         bar.innerText = id;
-        bar.style.position = 'relative'; // Position relative for animation
-        bar.style.transform = 'translateX(100%)'; // Start from the right
-        bar.style.visibility = 'hidden'; // Hide the bar initially
-        ganttChartDiv.appendChild(bar);
+        bar.style.height = '40px';
+        bar.style.textAlign = 'center';
+        bar.style.position = 'relative'; 
+        bar.style.transform = 'translateX(100%)'; 
+        bar.style.visibility = 'hidden'; 
 
-        // Use setTimeout to display the bar after the delay
+        bar.addEventListener('mouseover', function() {
+            bar.style.transform = 'translateY(-10px)';
+            bar.style.borderRadius = '5px';
+        });
+        
+        // Optional: Reset the scale back to normal when the mouse leaves
+        bar.addEventListener('mouseout', function() {
+            bar.style.transform = 'translateY(0px)';
+            bar.style.borderRadius = '5px 0 0 0';
+        });
+        
+
+        const timeLabel = document.createElement('div');
+        timeLabel.style.display = 'flex';
+        timeLabel.style.justifyContent = 'space-between';
+        timeLabel.style.width = `${(end - start) * 10}px`; 
+
+        const startTimeLabel = document.createElement('span');
+        startTimeLabel.innerText = start;
+        const endTimeLabel = document.createElement('span');
+        endTimeLabel.innerText = end;
+
+        timeLabel.appendChild(startTimeLabel);
+        timeLabel.appendChild(endTimeLabel);
+
+        barContainer.appendChild(bar);
+        barContainer.appendChild(timeLabel);
+
+        ganttChartDiv.appendChild(barContainer);
+
         setTimeout(() => {
-            bar.style.visibility = 'visible'; // Show the bar
-            bar.style.transition = 'transform 0.5s ease'; // Smooth transition
-            bar.style.transform = 'translateX(0)'; // Move to original position
-        }, index * 500); // Delay of 500 ms for each bar
+            bar.style.visibility = 'visible'; 
+            bar.style.transition = 'transform 0.5s ease'; 
+            bar.style.transform = 'translateX(0)'; 
+        }, index * 1000); 
     });
+
+    resultsDiv.appendChild(table);
+
+    // Calculate average waiting time and turnaround time
+    let totalWaitingTime = 0;
+    let totalTurnaroundTime = 0;
+    const numProcesses = ganttChart.length;
+
+    ganttChart.forEach(segment => {
+        const waitingTime = segment.start; // Assuming start is the waiting time
+        const turnaroundTime = segment.end - segment.start;
+        totalWaitingTime += waitingTime;
+        totalTurnaroundTime += turnaroundTime;
+    });
+
+    const avgWaitingTime = totalWaitingTime / numProcesses;
+    const avgTurnaroundTime = totalTurnaroundTime / numProcesses;
+
+    // Create a new table for average times
+    const avgTable = document.createElement('table');
+    avgTable.style.width = '100%';
+    avgTable.style.borderCollapse = 'collapse';
+
+    const avgHeaders = ['Average Waiting Time', 'Average Turnaround Time'];
+
+    const avgHeaderRow = document.createElement('tr');
+    avgHeaders.forEach(headerText => {
+        const avgHeader = document.createElement('th');
+        avgHeader.style.border = '1px solid white';
+        avgHeader.style.padding = '8px';
+        avgHeader.style.fontSize = '20px';
+        avgHeader.style.color = 'white';
+        avgHeader.innerText = headerText;
+        avgHeaderRow.appendChild(avgHeader);
+    });
+    avgTable.appendChild(avgHeaderRow);
+
+    const avgRow = document.createElement('tr');
+    const avgValues = [avgWaitingTime.toFixed(2), avgTurnaroundTime.toFixed(2)];
+    avgValues.forEach(value => {
+        const avgCell = document.createElement('td');
+        avgCell.style.border = '1px solid white';
+        avgCell.style.padding = '8px';
+        avgCell.style.fontSize = '18px';
+        avgCell.style.color = 'white';
+        avgCell.innerText = value;
+        avgRow.appendChild(avgCell);
+    });
+    avgTable.appendChild(avgRow);
+
+    // Append the average table to the ganttChartDiv instead of resultsDiv
+    ganttChartDiv.appendChild(avgTable);
 }
+
 
 
 
@@ -478,3 +721,4 @@ function displayResults(ganttChart) {
 //         createProcessInputs(false);
 //     }
 // }
+
