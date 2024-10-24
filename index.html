@@ -9,7 +9,7 @@
 </head>
 <body>
     <div class="main">
-        <h1 name="heading"><u>Proces</u>s <u>Schedulin</u>g <br><u>Simulato</u>r..</h1>
+        <h1 name="heading"><u>Proces</u>s <u>Schedulin</u>g <u>Simulato</u>r..</h1>
 
         <div>
             <label name="heading">Number of Processes: </label>
@@ -21,6 +21,7 @@
             <select id="algorithm" >
                 <option  value="FCFS">First-Come, First-Served (FCFS)</option>
                 <option value="SJF">Shortest Job First (SJF)</option>
+                <option value="preSJF">Shortest Job First (SJF:Preemptive)</option>
                 <option value="Priority">Priority Scheduling</option>
             </select>
         </div>
@@ -32,6 +33,7 @@
         <div id="processInputs"></div>
         <button onclick="simulate()" style="display: none;" id="simulate">Simulate</button>
         <div id="results"></div>
+        <div id="results1"></div>
         <div id="ganttChart"></div>
     </div>
 
