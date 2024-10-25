@@ -22,13 +22,14 @@ function validateInput(input) {
 function createProcessInputs() {
     const numProcesses = parseInt(document.getElementById('numProcesses').value);
     const processInputsDiv = document.getElementById('processInputs');
-    processInputsDiv.innerHTML = ''; // Clear previous inputs
+    processInputsDiv.innerHTML = ''; 
+
 
     for (let i = 0; i < numProcesses; i++) {
         // Create a div for each process
         const processDiv = document.createElement('div');
         processDiv.className = 'process-input';
-
+    
         // Create input for Arrival Time
         const arrivalInput = document.createElement('input');
         arrivalInput.type = 'number';
@@ -37,7 +38,7 @@ function createProcessInputs() {
         arrivalInput.min = 0;
         arrivalInput.oninput = () => validateInput(arrivalInput);
         processDiv.appendChild(arrivalInput);
-
+    
         // Create input for Burst Time
         const burstInput = document.createElement('input');
         burstInput.type = 'number';
@@ -46,9 +47,9 @@ function createProcessInputs() {
         burstInput.min = 0;
         burstInput.oninput = () => validateInput(burstInput);
         processDiv.appendChild(burstInput);
-
-        // Create input for Priority if the selected algorithm is Priority Scheduling
-        if (document.getElementById('algorithm').value === 'Priority') {
+    
+        // Create input for Priority if the selected algorithm is Priority Scheduling or Preemptive Priority
+        if (document.getElementById('algorithm').value === 'Priority' || document.getElementById('algorithm').value === 'prePriority') {
             const priorityInput = document.createElement('input');
             priorityInput.type = 'number';
             priorityInput.id = `priority${i}`;
@@ -57,13 +58,33 @@ function createProcessInputs() {
             priorityInput.oninput = () => validateInput(priorityInput);
             processDiv.appendChild(priorityInput);
         }
-
+    
         // Append the process div to the main container
         processInputsDiv.appendChild(processDiv);
     }
-
+    
+    // Check if the selected algorithm is Round Robin
+    if (document.getElementById('algorithm').value === 'timeSlice') {
+        const timeQuantumDiv = document.createElement('div');
+        timeQuantumDiv.className = 'time-quantum-input';
+    
+        // Create input for Time Quantum
+        const timeQuantumInput = document.createElement('input');
+        timeQuantumInput.type = 'number';
+        timeQuantumInput.id = 'timeQuantum';
+        timeQuantumInput.placeholder = 'Enter Time Quantum';
+        timeQuantumInput.min = 1; // Time quantum must be at least 1
+        timeQuantumInput.oninput = () => validateInput(timeQuantumInput);
+        timeQuantumDiv.appendChild(timeQuantumInput);
+    
+        // Append the Time Quantum div to the main container
+        processInputsDiv.appendChild(timeQuantumDiv);
+    }
+    
+    if(numProcesses>0){
     // Show the simulate button after creating inputs
     document.getElementById('simulate').style.display = 'inline-block';
+    }
 }
 
 
@@ -167,34 +188,8 @@ function shortestJobFirst(processes) {
     return completionTimes;
 }
 
-// Function for Priority scheduling
-function priorityScheduling(processes) {
-    // Sort processes by Arrival Time, then by Priority
-    processes.sort((a, b) => {
-        if (a.arrivalTime === b.arrivalTime) {
-            return a.priority - b.priority; // Lower priority number means higher priority
-        }
-        return a.arrivalTime - b.arrivalTime; // Sort by Arrival Time
-    });
+// Function for Priority scheduling 1
 
-    const completionTimes = [];
-    let currentTime = 0;
-
-    processes.forEach(process => {
-        if (currentTime < process.arrivalTime) {
-            currentTime = process.arrivalTime; // Wait for the next process
-        }
-        currentTime += process.burstTime; // Increment current time by burst time
-        completionTimes.push({
-            id: process.id,
-            completionTime: currentTime,
-            turnaroundTime: currentTime - process.arrivalTime,
-            waitingTime: currentTime - process.arrivalTime - process.burstTime,
-        });
-    });
-
-    return completionTimes;
-}
 
 // Function to display results
 
@@ -207,6 +202,7 @@ function priorityScheduling(processes) {
 
 // Function to create processes from input fields
 function createProcesses(numProcesses) {
+    
     processes = [];
     for (let i = 0; i < numProcesses; i++) {
         const arrivalTime = parseInt(document.getElementById(`arrivalTime${i}`).value);
@@ -214,6 +210,7 @@ function createProcesses(numProcesses) {
         const priority = document.getElementById(`priority${i}`) ? parseInt(document.getElementById(`priority${i}`).value) : null;
         processes.push({ id: `P${i + 1}`, arrivalTime, burstTime, remainingTime: burstTime, priority });
     }
+
 }
 
 // Function to run FCFS Scheduling
@@ -394,6 +391,33 @@ function mergeContinuousEntries(ganttChart) {
 }
 
 
+// function priorityScheduling(processes) {
+//     // Sort processes by Arrival Time, then by Priority
+//     processes.sort((a, b) => {
+//         if (a.arrivalTime === b.arrivalTime) {
+//             return a.priority - b.priority; // Lower priority number means higher priority
+//         }
+//         return a.arrivalTime - b.arrivalTime; // Sort by Arrival Time
+//     });
+
+//     const completionTimes = [];
+//     let currentTime = 0;
+
+//     processes.forEach(process => {
+//         if (currentTime < process.arrivalTime) {
+//             currentTime = process.arrivalTime; // Wait for the next process
+//         }
+//         currentTime += process.burstTime; // Increment current time by burst time
+//         completionTimes.push({
+//             id: process.id,
+//             completionTime: currentTime,
+//             turnaroundTime: currentTime - process.arrivalTime,
+//             waitingTime: currentTime - process.arrivalTime - process.burstTime,
+//         });
+//     });
+
+//     return completionTimes;
+// }
 
 
 
@@ -401,8 +425,7 @@ function mergeContinuousEntries(ganttChart) {
 
 
 
-
-// Function to run Priority Scheduling
+// Function to run Priority Scheduling 2
 function priorityScheduling() {
     let currentTime = 0;
     const ganttChart = [];
@@ -439,35 +462,254 @@ function priorityScheduling() {
     // Merge continuous "Idle" states into a single entry before returning the chart
     return mergeContinuousIdleStates(ganttChart);
 }
-// Function to run Preemptive Priority Scheduling
+
 function preemptivePriorityScheduling() {
     let currentTime = 0;
     const ganttChart = [];
-    let remainingProcesses = processes.slice();
+    const waitingQueue = [];
+    const remainingProcesses = processes.map(process => ({ ...process, remainingTime: process.burstTime }));
 
-    while (remainingProcesses.length) {
-        const availableProcesses = remainingProcesses.filter(p => p.arrivalTime <= currentTime);
+    // Sort processes by arrival time first
+    remainingProcesses.sort((a, b) => a.arrivalTime - b.arrivalTime);
 
-        if (availableProcesses.length) {
-            availableProcesses.sort((a, b) => a.priority - b.priority);
-            const process = availableProcesses[0];
+    let currentProcess = null;
 
-            ganttChart.push({ id: process.id, start: currentTime, end: currentTime + 1 });
+    while (remainingProcesses.length || waitingQueue.length || currentProcess) {
+        // Add processes to the waiting queue as they arrive
+        while (remainingProcesses.length && remainingProcesses[0].arrivalTime <= currentTime) {
+            waitingQueue.push(remainingProcesses.shift());
+        }
+
+        // Sort the waiting queue by priority (lower value means higher priority)
+        waitingQueue.sort((a, b) => a.priority - b.priority || a.arrivalTime - b.arrivalTime);
+
+        // Preempt if there's a new process with a higher priority
+        if (currentProcess) {
+            if (waitingQueue.length && waitingQueue[0].priority < currentProcess.priority) {
+                ganttChart.push({ id: currentProcess.id, start: currentTime - 1, end: currentTime });
+                currentProcess.remainingTime--;
+
+                if (currentProcess.remainingTime > 0) {
+                    waitingQueue.push(currentProcess); // Put the preempted process back in the queue
+                }
+
+                currentProcess = waitingQueue.shift(); // Switch to the higher priority process
+            }
+        } else if (waitingQueue.length) {
+            // If there's no current process, pick the next process with the highest priority
+            currentProcess = waitingQueue.shift();
+        }
+
+        // If no process is ready, the CPU is idle
+        if (!currentProcess && !waitingQueue.length && remainingProcesses.length) {
+            ganttChart.push({ id: "Idle", start: currentTime, end: currentTime + 1 });
+            currentTime++;
+            continue;
+        }
+
+        // Execute the current process for one unit of time (preemptive, step by step)
+        if (currentProcess) {
+            ganttChart.push({ id: currentProcess.id, start: currentTime, end: currentTime + 1 });
+            currentProcess.remainingTime--;
             currentTime++;
 
-            process.remainingTime--;
+            // If the current process finishes, set it to null
+            if (currentProcess.remainingTime === 0) {
+                currentProcess = null;
+            }
+        }
+    }
 
-            if (process.remainingTime === 0) {
-                remainingProcesses = remainingProcesses.filter(p => p !== process);
+    // Merge continuous "Idle" states into a single entry before returning the chart
+    return mergePreemptivePriorityStates(ganttChart);
+}
+
+function mergePreemptivePriorityStates(ganttChart) {
+    const mergedGanttChart = [];
+
+    for (let i = 0; i < ganttChart.length; i++) {
+        const currentEntry = ganttChart[i];
+
+        // If the current entry and the last merged entry are the same process, merge them
+        if (mergedGanttChart.length && mergedGanttChart[mergedGanttChart.length - 1].id === currentEntry.id) {
+            mergedGanttChart[mergedGanttChart.length - 1].end = currentEntry.end;
+        } 
+        // If the current entry is "Idle" and the previous entry is also "Idle", merge them
+        else if (mergedGanttChart.length && mergedGanttChart[mergedGanttChart.length - 1].id === "Idle" && currentEntry.id === "Idle") {
+            mergedGanttChart[mergedGanttChart.length - 1].end = currentEntry.end;
+        } 
+        // If it's a new process or an idle period, add it to the merged chart
+        else {
+            mergedGanttChart.push(currentEntry);
+        }
+    }
+
+    return mergedGanttChart;
+}
+
+
+// Function to get a random time quantum between 2 and 7
+function getRandomTimeQuantum() {
+
+    return Math.floor(Math.random() * 6) + 2; // Generates a random number between 2 and 7
+}
+
+function roundRobinScheduling() {
+    // Get time quantum from the input field
+    let timeQuantum = parseInt(document.getElementById('timeQuantum').value);
+
+    // Check if the value is valid, if not use a default value
+    if (isNaN(timeQuantum) || timeQuantum <= 0) {
+        timeQuantum = getRandomTimeQuantum();
+        console.log(`Invalid input! Using random time quantum: ${timeQuantum}`);
+    }
+
+    let currentTime = 0;
+    const ganttChart = [];
+    const waitingQueue = [];
+    const remainingProcesses = processes.map(process => ({ ...process, remainingTime: process.burstTime }));
+
+    while (remainingProcesses.length || waitingQueue.length) {
+        // Add processes to the waiting queue as they arrive
+        while (remainingProcesses.length && remainingProcesses[0].arrivalTime <= currentTime) {
+            waitingQueue.push(remainingProcesses.shift());
+        }
+
+        // If there's a process in the waiting queue, execute it
+        if (waitingQueue.length) {
+            const process = waitingQueue.shift();
+            
+            if (process.remainingTime <= timeQuantum) {
+                // If the process can finish within the time quantum, execute it fully
+                ganttChart.push({ id: process.id, start: currentTime, end: currentTime + process.remainingTime });
+                currentTime += process.remainingTime;
+                process.remainingTime = 0;  // Process is completed
+            } else {
+                // If the process cannot finish within the time quantum, execute for timeQuantum
+                ganttChart.push({ id: process.id, start: currentTime, end: currentTime + timeQuantum });
+                currentTime += timeQuantum;
+                process.remainingTime -= timeQuantum;
+                
+                // Re-add the process to the end of the waiting queue
+                waitingQueue.push(process);
             }
         } else {
+            // If no process is ready, the CPU is idle
             ganttChart.push({ id: "Idle", start: currentTime, end: currentTime + 1 });
             currentTime++;
         }
     }
 
-    return ganttChart;
+    // Merge continuous "Idle" states into a single entry
+    return mergeGanttChartForRoundRobin(ganttChart);
 }
+
+
+
+
+
+// function roundRobinSchedulingWithTimeQuantum(timeQuantum) {
+//     console.log(`Time Quantum: ${timeQuantum}`);
+
+//     let currentTime = 0;
+//     const ganttChart = [];
+//     const waitingQueue = [];
+//     const remainingProcesses = processes.map(process => ({ ...process, remainingTime: process.burstTime }));
+
+//     while (remainingProcesses.length || waitingQueue.length) {
+//         // Add processes to the waiting queue as they arrive
+//         while (remainingProcesses.length && remainingProcesses[0].arrivalTime <= currentTime) {
+//             waitingQueue.push(remainingProcesses.shift());
+//         }
+
+//         // If there's a process in the waiting queue, execute it
+//         if (waitingQueue.length) {
+//             const process = waitingQueue.shift();
+            
+//             // Log the current process being executed
+//             console.log(`Executing Process: ${process.id} at Time: ${currentTime}`);
+
+//             if (process.remainingTime <= timeQuantum) {
+//                 // If the process can finish within the time quantum, execute it fully
+//                 ganttChart.push({ id: process.id, start: currentTime, end: currentTime + process.remainingTime });
+//                 currentTime += process.remainingTime;
+//                 process.remainingTime = 0;  // Process is completed
+//             } else {
+//                 // If the process cannot finish within the time quantum, execute for timeQuantum
+//                 ganttChart.push({ id: process.id, start: currentTime, end: currentTime + timeQuantum });
+//                 currentTime += timeQuantum;
+//                 process.remainingTime -= timeQuantum;
+                
+//                 // Re-add the process to the end of the waiting queue
+//                 waitingQueue.push(process);
+//             }
+//         } else {
+//             // If no process is ready, the CPU is idle
+//             ganttChart.push({ id: "Idle", start: currentTime, end: currentTime + 1 });
+//             currentTime++;
+//         }
+//     }
+
+//     // Merge continuous "Idle" states into a single entry
+//     return mergeGanttChartForRoundRobin(ganttChart);
+// }
+
+
+
+
+
+
+function mergeGanttChartForRoundRobin(ganttChart) {
+    const mergedGanttChart = [];
+
+    for (let i = 0; i < ganttChart.length; i++) {
+        const currentEntry = ganttChart[i];
+
+        // If the current entry is "Idle" and the previous one was also "Idle", merge them
+        if (mergedGanttChart.length && mergedGanttChart[mergedGanttChart.length - 1].id === "Idle" && currentEntry.id === "Idle") {
+            mergedGanttChart[mergedGanttChart.length - 1].end = currentEntry.end;
+        } else if (mergedGanttChart.length && mergedGanttChart[mergedGanttChart.length - 1].id === currentEntry.id) {
+            // If the current process is the same as the previous one, merge their time periods
+            mergedGanttChart[mergedGanttChart.length - 1].end = currentEntry.end;
+        } else {
+            // Otherwise, push the current entry to the merged Gantt chart
+            mergedGanttChart.push(currentEntry);
+        }
+    }
+
+    return mergedGanttChart;
+}
+
+
+// Function to run Preemptive Priority Scheduling
+// function preemptivePriorityScheduling() {
+//     let currentTime = 0;
+//     const ganttChart = [];
+//     let remainingProcesses = processes.slice();
+
+//     while (remainingProcesses.length) {
+//         const availableProcesses = remainingProcesses.filter(p => p.arrivalTime <= currentTime);
+
+//         if (availableProcesses.length) {
+//             availableProcesses.sort((a, b) => a.priority - b.priority);
+//             const process = availableProcesses[0];
+
+//             ganttChart.push({ id: process.id, start: currentTime, end: currentTime + 1 });
+//             currentTime++;
+
+//             process.remainingTime--;
+
+//             if (process.remainingTime === 0) {
+//                 remainingProcesses = remainingProcesses.filter(p => p !== process);
+//             }
+//         } else {
+//             ganttChart.push({ id: "Idle", start: currentTime, end: currentTime + 1 });
+//             currentTime++;
+//         }
+//     }
+
+//     return ganttChart;
+// }
 
 // Function to simulate the selected scheduling algorithm
 function simulate() {
@@ -475,6 +717,8 @@ function simulate() {
     createProcesses(numProcesses);
 
     const selectedAlgorithm = document.getElementById('algorithm').value;
+    
+   
     let ganttChart;
 
     switch (selectedAlgorithm) {
@@ -489,6 +733,15 @@ function simulate() {
             break;
         case "Priority":
             ganttChart = priorityScheduling();
+            break;
+        case "prePriority":
+            ganttChart = preemptivePriorityScheduling();
+            break; 
+        case "roundRobbin":
+            ganttChart = roundRobinScheduling();
+            break;
+        case "timeSlice":
+            ganttChart = roundRobinScheduling();
             break;
         default:
             break;
@@ -553,7 +806,7 @@ function displayResults(ganttChart) {
     // Style the table cells
     table.querySelectorAll('td, th').forEach(cell => {
         cell.style.border = '1px solid white'; 
-        cell.style.color = 'white'; 
+        cell.style.color = '#1d1d1d'; 
     });
 
     // Create header row
@@ -600,6 +853,9 @@ function displayResults(ganttChart) {
         const bar = document.createElement('div');
         bar.className = 'gantt-bar';
         bar.style.width = `${(end - start) * 10}px`; 
+        // if(id=='Idle' && ((start+1)==end)){
+        //     bar.style.width = `${(end - start) * 35}px`;
+        // }
         bar.style.backgroundColor = id === "Idle" ? 'gray' : getRandomPastelColor(); 
         bar.innerText = id;
         bar.style.height = '40px';
@@ -610,12 +866,15 @@ function displayResults(ganttChart) {
 
         bar.addEventListener('mouseover', function() {
             bar.style.transform = 'translateY(-10px)';
+            timeLabel.style.transform = 'translateY(-10px)';
             bar.style.borderRadius = '5px';
+
         });
         
         // Optional: Reset the scale back to normal when the mouse leaves
         bar.addEventListener('mouseout', function() {
             bar.style.transform = 'translateY(0px)';
+            timeLabel.style.transform = 'translateY(0px)';
             bar.style.borderRadius = '5px 0 0 0';
         });
         
@@ -624,6 +883,7 @@ function displayResults(ganttChart) {
         timeLabel.style.display = 'flex';
         timeLabel.style.justifyContent = 'space-between';
         timeLabel.style.width = `${(end - start) * 10}px`; 
+        timeLabel.style.visibility = 'hidden'; 
 
         const startTimeLabel = document.createElement('span');
         startTimeLabel.innerText = start;
@@ -640,8 +900,11 @@ function displayResults(ganttChart) {
 
         setTimeout(() => {
             bar.style.visibility = 'visible'; 
+            timeLabel.style.visibility = 'visible'; 
             bar.style.transition = 'transform 0.5s ease'; 
+            timeLabel.style.transition = 'transform 0.5s ease'; 
             bar.style.transform = 'translateX(0)'; 
+            timeLabel.style.transform = 'translateX(0)'; 
         }, index * 1000); 
     });
 
