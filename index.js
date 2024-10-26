@@ -301,58 +301,83 @@ function preemptiveSjfScheduling() {
             waitingQueue.push(remainingProcesses.shift());
         }
 
-        // Handle the currently executing process
+        // Sort the waiting queue by remaining time (Shortest Remaining Time First)
+        waitingQueue.sort((a, b) => a.remainingTime - b.remainingTime || a.arrivalTime - b.arrivalTime);
+
+        // Preempt if there's a new process with a shorter remaining time
         if (currentProcess) {
-            // Decrease the remaining time for the current process
+            if (waitingQueue.length && waitingQueue[0].remainingTime < currentProcess.remainingTime) {
+                ganttChart.push({ id: currentProcess.id, start: currentTime - 1, end: currentTime });
+                currentProcess.remainingTime--;
+
+                if (currentProcess.remainingTime > 0) {
+                    waitingQueue.push(currentProcess); // Put the preempted process back in the queue
+                }
+
+                currentProcess = waitingQueue.shift(); // Switch to the process with the shortest remaining time
+            }
+        } else if (waitingQueue.length) {
+            // If there's no current process, pick the process with the shortest remaining time
+            currentProcess = waitingQueue.shift();
+        }
+
+        // If no process is ready, the CPU is idle
+        if (!currentProcess && !waitingQueue.length && remainingProcesses.length) {
+            ganttChart.push({ id: "Idle", start: currentTime, end: currentTime + 1 });
+            currentTime++;
+            continue;
+        }
+
+        // Execute the current process for one unit of time
+        if (currentProcess) {
             ganttChart.push({ id: currentProcess.id, start: currentTime, end: currentTime + 1 });
             currentProcess.remainingTime--;
+            currentTime++;
 
-            // Check for completion
+            // If the current process finishes, set it to null
             if (currentProcess.remainingTime === 0) {
                 currentProcess = null;
             }
         }
-
-        // Check for new processes that may preempt
-        if (waitingQueue.length) {
-            // Sort the waiting queue by remaining time
-            waitingQueue.sort((a, b) => a.remainingTime - b.remainingTime);
-            const nextProcess = waitingQueue[0];
-
-            // If there is a new process with a shorter remaining time
-            if (!currentProcess || nextProcess.remainingTime < currentProcess.remainingTime) {
-                // Preempt the current process if necessary
-                if (currentProcess) {
-                    waitingQueue.push(currentProcess);
-                }
-                currentProcess = waitingQueue.shift(); // Start the new process
-            }
-        }
-
-        // If there's no current process and no new arrivals, add an extended Idle state
-        if (!currentProcess && waitingQueue.length === 0) {
-            let idleStart = currentTime;
-
-            // Increment currentTime to find how long the idle time lasts
-            while (!currentProcess && waitingQueue.length === 0 && remainingProcesses.length) {
-                currentTime++;
-                // Check for arriving processes during the idle time
-                while (remainingProcesses.length && remainingProcesses[0].arrivalTime <= currentTime) {
-                    waitingQueue.push(remainingProcesses.shift());
-                }
-            }
-
-            // Create an Idle entry that spans the full duration
-            ganttChart.push({ id: "Idle", start: idleStart, end: currentTime });
-            currentTime--; // Decrement to adjust for the next loop iteration
-        }
-
-        // Increment the current time
-        currentTime++;
     }
 
-    // Merge continuous entries in the Gantt chart
-    return mergeContinuousEntries(ganttChart);
+    // Merge continuous "Idle" states into a single entry before returning the chart
+    return mergePreemptiveSjfEntries(ganttChart);
+}
+
+function mergePreemptiveSjfEntries(ganttChart) {
+    const mergedChart = [];
+    for (let i = 0; i < ganttChart.length; i++) {
+        const current = ganttChart[i];
+        
+        if (mergedChart.length > 0) {
+            const last = mergedChart[mergedChart.length - 1];
+            
+            // Check if the current entry has the same ID as the last merged entry
+            if (current.id === last.id) {
+                // Merge continuous time intervals for the same process
+                last.end = current.end;
+            } else {
+                // Push a new entry if it's a different process
+                mergedChart.push({ ...current });
+            }
+        } else {
+            // For the first entry, add it directly to mergedChart
+            mergedChart.push({ ...current });
+        }
+    }
+
+    // Adjust the merged entries by decreasing start and end times by 1 if needed
+    if (mergedChart.length > 0) {
+        for (let i = 1; i < mergedChart.length; i++) { // Skip the first entry's start time adjustment
+            mergedChart[i].start -= 1; 
+            mergedChart[i].end -= 1;
+        }
+        // Adjust the end time of the last entry as well
+        mergedChart[mergedChart.length - 1].end -= 1;
+    }
+
+    return mergedChart;
 }
 
 // Function to merge continuous entries in the Gantt chart
@@ -568,7 +593,9 @@ function roundRobinScheduling() {
     let currentTime = 0;
     const ganttChart = [];
     const waitingQueue = [];
-    const remainingProcesses = processes.map(process => ({ ...process, remainingTime: process.burstTime }));
+    const remainingProcesses = processes
+        .map(process => ({ ...process, remainingTime: process.burstTime }))
+        .sort((a, b) => a.arrivalTime - b.arrivalTime); // Sort processes by arrival time
 
     while (remainingProcesses.length || waitingQueue.length) {
         // Add processes to the waiting queue as they arrive
@@ -604,6 +631,7 @@ function roundRobinScheduling() {
     // Merge continuous "Idle" states into a single entry
     return mergeGanttChartForRoundRobin(ganttChart);
 }
+
 
 
 
@@ -791,6 +819,178 @@ function getRandomPastelColor() {
 //     });
 // }
 
+// function displayResults(ganttChart) {
+//     const resultsDiv = document.getElementById('results');
+//     const ganttChartDiv = document.getElementById('ganttChart');
+//     resultsDiv.innerHTML = '';
+//     ganttChartDiv.innerHTML = '';
+
+//     // Create a table element for the results
+//     const table = document.createElement('table');
+//     table.style.width = '60%';
+//     table.style.borderCollapse = 'collapse';
+//     table.style.margin = '0 auto'; // This will center the table
+
+
+//     // Style the table cells
+//     table.querySelectorAll('td, th').forEach(cell => {
+//         cell.style.border = '1px solid white'; 
+//         cell.style.color = '#1d1d1d'; 
+//     });
+
+//     // Create header row
+//     const headerRow = document.createElement('tr');
+//     const headers = ['ID', 'Start', 'End'];
+
+//     headers.forEach(headerText => {
+//         const header = document.createElement('th');
+//         header.style.border = '1px solid white';
+//         header.style.padding = '8px';
+//         header.style.fontSize = '20px';
+//         header.style.color = 'white'; 
+//         header.innerText = headerText;
+//         headerRow.appendChild(header);
+//     });
+
+//     table.appendChild(headerRow);
+
+//     // Fill table with Gantt chart data
+//     ganttChart.forEach((segment, index) => {
+//         const { id, start, end } = segment;
+
+//         const row = document.createElement('tr');
+
+//         [id, start, end].forEach(cellText => {
+//             const cell = document.createElement('td');
+//             cell.style.border = '1px solid white';
+//             cell.style.padding = '8px';
+//             cell.style.fontSize = '18px';
+//             cell.style.color = 'white'; 
+//             cell.innerText = cellText;
+//             row.appendChild(cell);
+//         });
+
+//         table.appendChild(row);
+
+//         const barContainer = document.createElement('div');
+//         barContainer.style.display = 'flex';
+//         barContainer.style.flexDirection = 'column';
+//         barContainer.style.alignItems = 'center';
+//         barContainer.style.position = 'relative';
+//         barContainer.style.margin = '10px 0';
+
+//         const bar = document.createElement('div');
+//         bar.className = 'gantt-bar';
+//         bar.style.width = `${(end - start) * 10}px`; 
+//         // if(id=='Idle' && ((start+1)==end)){
+//         //     bar.style.width = `${(end - start) * 35}px`;
+//         // }
+//         bar.style.backgroundColor = id === "Idle" ? 'gray' : getRandomPastelColor(); 
+//         bar.innerText = id;
+//         bar.style.height = '40px';
+//         bar.style.textAlign = 'center';
+//         bar.style.position = 'relative'; 
+//         bar.style.transform = 'translateX(100%)'; 
+//         bar.style.visibility = 'hidden'; 
+
+//         bar.addEventListener('mouseover', function() {
+//             bar.style.transform = 'translateY(-10px)';
+//             timeLabel.style.transform = 'translateY(-10px)';
+//             bar.style.borderRadius = '5px';
+
+//         });
+        
+//         // Optional: Reset the scale back to normal when the mouse leaves
+//         bar.addEventListener('mouseout', function() {
+//             bar.style.transform = 'translateY(0px)';
+//             timeLabel.style.transform = 'translateY(0px)';
+//             bar.style.borderRadius = '5px 0 0 0';
+//         });
+        
+
+//         const timeLabel = document.createElement('div');
+//         timeLabel.style.display = 'flex';
+//         timeLabel.style.justifyContent = 'space-between';
+//         timeLabel.style.width = `${(end - start) * 10}px`; 
+//         timeLabel.style.visibility = 'hidden'; 
+
+//         const startTimeLabel = document.createElement('span');
+//         startTimeLabel.innerText = start;
+//         const endTimeLabel = document.createElement('span');
+//         endTimeLabel.innerText = end;
+
+//         timeLabel.appendChild(startTimeLabel);
+//         timeLabel.appendChild(endTimeLabel);
+
+//         barContainer.appendChild(bar);
+//         barContainer.appendChild(timeLabel);
+
+//         ganttChartDiv.appendChild(barContainer);
+
+//         setTimeout(() => {
+//             bar.style.visibility = 'visible'; 
+//             timeLabel.style.visibility = 'visible'; 
+//             bar.style.transition = 'transform 0.5s ease'; 
+//             timeLabel.style.transition = 'transform 0.5s ease'; 
+//             bar.style.transform = 'translateX(0)'; 
+//             timeLabel.style.transform = 'translateX(0)'; 
+//         }, index * 1000); 
+//     });
+
+//     resultsDiv.appendChild(table);
+
+//     // Calculate average waiting time and turnaround time
+//     let totalWaitingTime = 0;
+//     let totalTurnaroundTime = 0;
+//     const numProcesses = ganttChart.length;
+
+//     ganttChart.forEach(segment => {
+//         const waitingTime = segment.start; // Assuming start is the waiting time
+//         const turnaroundTime = segment.end - segment.start;
+//         totalWaitingTime += waitingTime;
+//         totalTurnaroundTime += turnaroundTime;
+//     });
+
+//     const avgWaitingTime = totalWaitingTime / numProcesses;
+//     const avgTurnaroundTime = totalTurnaroundTime / numProcesses;
+
+//     // Create a new table for average times
+//     const avgTable = document.createElement('table');
+//     avgTable.style.width = '100%';
+//     avgTable.style.borderCollapse = 'collapse';
+
+//     const avgHeaders = ['Average Waiting Time', 'Average Turnaround Time'];
+
+//     const avgHeaderRow = document.createElement('tr');
+//     avgHeaders.forEach(headerText => {
+//         const avgHeader = document.createElement('th');
+//         avgHeader.style.border = '1px solid white';
+//         avgHeader.style.padding = '8px';
+//         avgHeader.style.fontSize = '20px';
+//         avgHeader.style.color = 'white';
+//         avgHeader.innerText = headerText;
+//         avgHeaderRow.appendChild(avgHeader);
+//     });
+//     avgTable.appendChild(avgHeaderRow);
+
+//     const avgRow = document.createElement('tr');
+//     const avgValues = [avgWaitingTime.toFixed(2), avgTurnaroundTime.toFixed(2)];
+//     avgValues.forEach(value => {
+//         const avgCell = document.createElement('td');
+//         avgCell.style.border = '1px solid white';
+//         avgCell.style.padding = '8px';
+//         avgCell.style.fontSize = '18px';
+//         avgCell.style.color = 'white';
+//         avgCell.innerText = value;
+//         avgRow.appendChild(avgCell);
+//     });
+//     avgTable.appendChild(avgRow);
+
+//     // Append the average table to the ganttChartDiv instead of resultsDiv
+//     ganttChartDiv.appendChild(avgTable);
+// }
+
+
 function displayResults(ganttChart) {
     const resultsDiv = document.getElementById('results');
     const ganttChartDiv = document.getElementById('ganttChart');
@@ -801,25 +1001,17 @@ function displayResults(ganttChart) {
     const table = document.createElement('table');
     table.style.width = '60%';
     table.style.borderCollapse = 'collapse';
-    table.style.margin = '0 auto'; // This will center the table
-
-
-    // Style the table cells
-    table.querySelectorAll('td, th').forEach(cell => {
-        cell.style.border = '1px solid white'; 
-        cell.style.color = '#1d1d1d'; 
-    });
+    table.style.margin = '0 auto';
 
     // Create header row
     const headerRow = document.createElement('tr');
     const headers = ['ID', 'Start', 'End'];
-
     headers.forEach(headerText => {
         const header = document.createElement('th');
         header.style.border = '1px solid white';
         header.style.padding = '8px';
         header.style.fontSize = '20px';
-        header.style.color = 'white'; 
+        header.style.color = 'white';
         header.innerText = headerText;
         headerRow.appendChild(header);
     });
@@ -829,21 +1021,19 @@ function displayResults(ganttChart) {
     // Fill table with Gantt chart data
     ganttChart.forEach((segment, index) => {
         const { id, start, end } = segment;
-
         const row = document.createElement('tr');
-
         [id, start, end].forEach(cellText => {
             const cell = document.createElement('td');
             cell.style.border = '1px solid white';
             cell.style.padding = '8px';
             cell.style.fontSize = '18px';
-            cell.style.color = 'white'; 
+            cell.style.color = 'white';
             cell.innerText = cellText;
             row.appendChild(cell);
         });
-
         table.appendChild(row);
 
+        // Create a container for each Gantt chart bar
         const barContainer = document.createElement('div');
         barContainer.style.display = 'flex';
         barContainer.style.flexDirection = 'column';
@@ -853,41 +1043,22 @@ function displayResults(ganttChart) {
 
         const bar = document.createElement('div');
         bar.className = 'gantt-bar';
-        bar.style.width = `${(end - start) * 10}px`; 
-        // if(id=='Idle' && ((start+1)==end)){
-        //     bar.style.width = `${(end - start) * 35}px`;
-        // }
-        bar.style.backgroundColor = id === "Idle" ? 'gray' : getRandomPastelColor(); 
+        bar.style.width = `${(end - start) * 10}px`;
+        bar.style.backgroundColor = id === "Idle" ? 'gray' : getRandomPastelColor();
         bar.innerText = id;
         bar.style.height = '40px';
         bar.style.textAlign = 'center';
-        bar.style.position = 'relative'; 
         bar.style.transform = 'translateX(100%)'; 
-        bar.style.visibility = 'hidden'; 
-
-        bar.addEventListener('mouseover', function() {
-            bar.style.transform = 'translateY(-10px)';
-            timeLabel.style.transform = 'translateY(-10px)';
-            bar.style.borderRadius = '5px';
-
-        });
-        
-        // Optional: Reset the scale back to normal when the mouse leaves
-        bar.addEventListener('mouseout', function() {
-            bar.style.transform = 'translateY(0px)';
-            timeLabel.style.transform = 'translateY(0px)';
-            bar.style.borderRadius = '5px 0 0 0';
-        });
-        
-
+        // Add time label only for the first bar, with end time for subsequent bars
         const timeLabel = document.createElement('div');
         timeLabel.style.display = 'flex';
         timeLabel.style.justifyContent = 'space-between';
-        timeLabel.style.width = `${(end - start) * 10}px`; 
-        timeLabel.style.visibility = 'hidden'; 
+        timeLabel.style.width = `${(end - start) * 10}px`;
 
+        // Only display the start time for the first bar, then only end times
         const startTimeLabel = document.createElement('span');
-        startTimeLabel.innerText = start;
+        if (index === 0) startTimeLabel.innerText = start;
+        
         const endTimeLabel = document.createElement('span');
         endTimeLabel.innerText = end;
 
@@ -899,14 +1070,15 @@ function displayResults(ganttChart) {
 
         ganttChartDiv.appendChild(barContainer);
 
+        // Animate the bars and make them visible
         setTimeout(() => {
-            bar.style.visibility = 'visible'; 
-            timeLabel.style.visibility = 'visible'; 
-            bar.style.transition = 'transform 0.5s ease'; 
-            timeLabel.style.transition = 'transform 0.5s ease'; 
-            bar.style.transform = 'translateX(0)'; 
-            timeLabel.style.transform = 'translateX(0)'; 
-        }, index * 1000); 
+            bar.style.visibility = 'visible';
+            timeLabel.style.visibility = 'visible';
+            bar.style.transition = 'transform 0.5s ease';
+            timeLabel.style.transition = 'transform 0.5s ease';
+            bar.style.transform = 'translateX(0)';
+            timeLabel.style.transform = 'translateX(0)';
+        }, index * 1000);
     });
 
     resultsDiv.appendChild(table);
@@ -917,7 +1089,7 @@ function displayResults(ganttChart) {
     const numProcesses = ganttChart.length;
 
     ganttChart.forEach(segment => {
-        const waitingTime = segment.start; // Assuming start is the waiting time
+        const waitingTime = segment.start;
         const turnaroundTime = segment.end - segment.start;
         totalWaitingTime += waitingTime;
         totalTurnaroundTime += turnaroundTime;
@@ -961,8 +1133,6 @@ function displayResults(ganttChart) {
     // Append the average table to the ganttChartDiv instead of resultsDiv
     ganttChartDiv.appendChild(avgTable);
 }
-
-
 
 
 
