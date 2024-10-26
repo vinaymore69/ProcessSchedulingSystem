@@ -120,11 +120,14 @@ label {
     /* border-bottom-left-radius: 10px; */
     /* height: 30px; */
     transition: all 0.5s ease-in-out;
+    transform: translatex(-10px);
 }
-.gantt-bar:hover{
+
+.gantt-bar:hover {
 
     cursor: pointer;
 }
+
 #resultsTable {
     width: 100%;
     /* Full width for the table */
