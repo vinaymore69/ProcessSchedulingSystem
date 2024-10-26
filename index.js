@@ -556,8 +556,9 @@ function getRandomTimeQuantum() {
 
 function roundRobinScheduling() {
     // Get time quantum from the input field
-    let timeQuantum = parseInt(document.getElementById('timeQuantum').value);
-
+    let timeQuantumInput = document.getElementById('timeQuantum');
+    let timeQuantum = timeQuantumInput ? parseInt(timeQuantumInput.value) : NaN;
+    
     // Check if the value is valid, if not use a default value
     if (isNaN(timeQuantum) || timeQuantum <= 0) {
         timeQuantum = getRandomTimeQuantum();
